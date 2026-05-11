@@ -1,170 +1,171 @@
-// VISUAL AUDIT — S2 · Dashboard Overview.png
-// Background: #0D1117
-// Sidebar: #161B22, width 256px
-// Card background: #161B22
-// Border color: #30363D
-// Primary accent: #8B5CF6
-// Success: #22C55E
-// Font: Inter, system-ui
-// Layout: Sidebar + main content with 4-column metric cards, activity list, charts
-
-// SELF-REVIEW
-// Background color matches screenshot: YES
-// Typography scale matches screenshot: YES
-// Spacing/padding matches screenshot: YES
-// All visible elements present: YES
-// Chart type and colors match screenshot: YES
-// If any NO: None
-
 "use client";
 
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
+import { BarChart, Bar, XAxis, ResponsiveContainer, Cell } from "recharts";
+import { Settings, LayoutGrid, Gauge, GitBranch, Tablet, Sparkles } from "lucide-react";
 import { DashboardShell } from "@/components/layout/DashboardShell";
-import { MetricCard } from "@/components/ui/MetricCard";
-import { GitCommit, Users, Activity, RefreshCw, Plus, GitBranch, ArrowRight } from "lucide-react";
-import {
-  dashboardMetrics,
-  recentActivity,
-  commitDistribution,
-  collaboratorInsights,
-} from "@/lib/mock-data";
+
+// Mock data matching the screenshot visuals
+const repositoryGrowth = [
+  { day: "M", value: 30 },
+  { day: "T", value: 45 },
+  { day: "W", value: 35 },
+  { day: "T", value: 65 },
+  { day: "F", value: 40 },
+  { day: "S", value: 55 },
+  { day: "S", value: 25 },
+  { day: "M", value: 50 },
+];
 
 export default function DashboardPage() {
   return (
     <DashboardShell>
-      <div className="max-w-7xl mx-auto">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-8">
-          <div>
-            <h1 className="text-2xl font-bold text-text-heading">Dashboard</h1>
-            <p className="text-text-secondary mt-1">Welcome back! Here&apos;s your project overview.</p>
-          </div>
-          <div className="flex items-center gap-3">
-            <button className="flex items-center gap-2 px-4 py-2 bg-accent-primary text-white text-sm font-medium rounded-lg hover:bg-accent-primary-hover transition-colors">
-              <Plus size={16} />
-              New Analysis
-            </button>
-          </div>
+      <div className="flex min-h-screen bg-[#08090D] text-[#8B949E] font-sans">
+      
+      {/* Main Content */}
+      <main className="flex-1 p-8">
+        
+        {/* Page Title Section */}
+        <div className="mb-8">
+          <h1 className="text-4xl font-bold text-white mb-1">Overview</h1>
+          <p className="text-[10px] text-[#484F58] font-bold tracking-tighter uppercase">
+            V1.0 Obsidian Chronograph — Repository Analytics
+          </p>
         </div>
 
-        {/* Metric Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          {dashboardMetrics.map((metric, index) => (
-            <MetricCard
-              key={index}
-              title={metric.title}
-              value={metric.value}
-              delta={metric.delta}
-              deltaLabel={metric.deltaLabel}
-              icon={index === 0 ? GitCommit : index === 1 ? Users : index === 2 ? Activity : RefreshCw}
-              iconBgColor={metric.iconBgColor}
-              iconColor={metric.iconColor}
+        {/* Metric Grid */}
+        <div className="grid grid-cols-4 gap-4 mb-6">
+          <MetricCard title="Total Commits" value="12,842" delta="+12.4%" color="#00E6A4" />
+          <MetricCard title="Active Contributors" value="48" badge="Active Now" color="#8B5CF6" />
+          <MetricCard title="Code Health Score" value="94%" delta="↑ 2.1% this week" color="#00E6A4" />
+          <MetricCard title="Last Sync" value="2 MINS AGO" badge="SECURE LINK" color="#D97706" />
+        </div>
+
+        <div className="grid grid-cols-12 gap-6">
+          
+          {/* Recent Activity List */}
+          <div className="col-span-8 flex flex-col gap-4">
+            <div className="flex justify-between items-center px-2">
+              <h2 className="text-lg font-bold text-white">Recent Activity</h2>
+              <span className="text-[10px] font-bold text-[#00E6A4] uppercase tracking-widest cursor-pointer">View All Stream</span>
+            </div>
+            
+            <ActivityItem 
+              title="Refactored Core Auth Middleware"
+              desc="JWT validation and session persistence. Optimized token refresh cycle."
+              tag="#refactor"
+              time="14:20 PM"
+              color="#00E6A4"
             />
-          ))}
-        </div>
-
-        <div className="grid lg:grid-cols-3 gap-6">
-          {/* Recent Activity */}
-          <div className="lg:col-span-2">
-            <div className="bg-card-bg border border-card-border rounded-xl p-6">
-              <div className="flex items-center justify-between mb-6">
-                <h2 className="text-lg font-semibold text-text-heading">Recent Activity</h2>
-                <button className="text-sm text-accent-primary hover:text-accent-primary-hover transition-colors flex items-center gap-1">
-                  View All <ArrowRight size={14} />
-                </button>
-              </div>
-              <div className="space-y-4">
-                {recentActivity.map((activity, index) => (
-                  <div key={index} className="flex items-start gap-4 p-3 bg-page-bg rounded-lg hover:bg-card-hover transition-colors">
-                    <div
-                      className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-sm font-bold text-white"
-                      style={{ backgroundColor: activity.iconBg }}
-                    >
-                      {activity.icon}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm text-text-primary font-medium truncate">{activity.message}</p>
-                      <div className="flex items-center gap-2 mt-1">
-                        <span className="text-xs text-text-muted">{activity.author}</span>
-                        <span className="text-xs text-text-muted">•</span>
-                        <div className="flex items-center gap-1">
-                          <GitBranch size={10} className="text-text-muted" />
-                          <span className="text-xs text-text-muted">{activity.branch}</span>
-                        </div>
-                        <span className="text-xs text-text-muted">•</span>
-                        <span className="text-xs text-text-muted">{activity.time}</span>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Commit Distribution */}
-            <div className="bg-card-bg border border-card-border rounded-xl p-6 mt-6">
-              <div className="flex items-center justify-between mb-6">
-                <div>
-                  <h2 className="text-lg font-semibold text-text-heading">Commit Distribution</h2>
-                  <p className="text-sm text-text-secondary mt-1">Daily commits over the past week</p>
-                </div>
-              </div>
-              <ResponsiveContainer width="100%" height={240}>
-                <BarChart data={commitDistribution}>
-                  <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: "#8B949E" }} />
-                  <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: "#8B949E" }} />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: "#161B22",
-                      border: "1px solid #30363D",
-                      borderRadius: "8px",
-                      fontSize: "12px",
-                    }}
-                  />
-                  <Bar dataKey="production" fill="#3B82F6" radius={[4, 4, 0, 0]} name="Production" />
-                  <Bar dataKey="staging" fill="#8B5CF6" radius={[4, 4, 0, 0]} name="Staging" />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
+            <ActivityItem 
+              title="Merge PR #492: Obsidian UI System"
+              desc="Integrated 3D component library and glassmorphism shaders into dashboard."
+              tag="#merge"
+              time="11:05 AM"
+              color="#8B5CF6"
+            />
+            <ActivityItem 
+              title="Critical: Memory Leak Detected"
+              desc="Scanner found leak in WebSocket listener within hotzone rendering engine."
+              button="INITIATE FIX"
+              time="09:45 AM"
+              color="#EF4444"
+            />
           </div>
 
-          {/* Collaborator Insights */}
-          <div>
-            <div className="bg-card-bg border border-card-border rounded-xl p-6">
-              <h2 className="text-lg font-semibold text-text-heading mb-6">Collaborator Insights</h2>
-              <div className="space-y-4">
-                {collaboratorInsights.map((person, index) => (
-                  <div key={index} className="flex items-center gap-3">
-                    <div
-                      className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-semibold text-white"
-                      style={{ backgroundColor: person.avatarBg }}
-                    >
-                      {person.initials}
-                    </div>
-                    <div className="flex-1">
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm font-medium text-text-primary">{person.name}</span>
-                        <span className="text-sm font-medium text-accent-primary">{person.value}</span>
-                      </div>
-                      <div className="mt-1">
-                        <div className="h-2 bg-page-bg rounded-full overflow-hidden">
-                          <div
-                            className="h-full rounded-full"
-                            style={{
-                              width: `${(person.value / collaboratorInsights[0].value) * 100}%`,
-                              backgroundColor: person.avatarBg,
-                            }}
-                          />
-                        </div>
-                      </div>
-                      <span className="text-xs text-text-muted">{person.label}</span>
-                    </div>
-                  </div>
-                ))}
+          {/* Right Column: Charts & Hotzones */}
+          <div className="col-span-4 flex flex-col gap-6">
+            
+            {/* Repository Growth Chart */}
+            <div className="bg-[#11141D] border border-[#1F2937] rounded-xl p-6">
+              <h3 className="text-[10px] font-bold text-[#484F58] uppercase tracking-widest mb-6">Repository Growth</h3>
+              <div className="h-[240px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={repositoryGrowth}>
+                    <XAxis 
+                      dataKey="day" 
+                      axisLine={false} 
+                      tickLine={false} 
+                      tick={{ fill: '#484F58', fontSize: 10, fontWeight: 'bold' }} 
+                    />
+                    <Bar dataKey="value" radius={[2, 2, 0, 0]}>
+                      {repositoryGrowth.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill="#00E6A4" fillOpacity={1} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
               </div>
             </div>
+
+            {/* Active Hotzones */}
+            <div className="bg-[#11141D] border border-[#1F2937] rounded-xl p-6">
+              <h3 className="text-[10px] font-bold text-[#484F58] uppercase tracking-widest mb-6">Active Hotzones</h3>
+              <div className="space-y-6">
+                <HotzoneRow label="/api/v1/auth" status="CRITICAL" dotColor="#EF4444" />
+                <HotzoneRow label="/core/rendering" status="HEAVY" dotColor="#D97706" />
+                <HotzoneRow label="/ui/obsidian" status="NOMINAL" dotColor="#00E6A4" />
+              </div>
+            </div>
+
           </div>
         </div>
+      </main>
       </div>
     </DashboardShell>
+  );
+}
+
+// Sub-components for cleaner structure
+function MetricCard({ title, value, delta, badge, color }: any) {
+  return (
+    <div className="bg-[#11141D] border border-[#1F2937] rounded-xl p-5 relative overflow-hidden">
+      <div className="flex justify-between items-start mb-6">
+        <div className="w-8 h-8 rounded bg-[#1F2937]/50 border border-[#30363D]" style={{ backgroundColor: `${color}15` }}></div>
+        {delta && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border border-[#00E6A4]/30 text-[#00E6A4] bg-[#00E6A4]/5">{delta}</span>}
+        {badge && <span className="text-[8px] font-bold px-2 py-0.5 rounded-full border border-[#8B5CF6]/30 text-[#8B5CF6] uppercase">{badge}</span>}
+      </div>
+      <div className="text-[9px] font-bold text-[#484F58] uppercase tracking-wider mb-1">{title}</div>
+      <div className="text-2xl font-bold text-white">{value}</div>
+    </div>
+  );
+}
+
+function ActivityItem({ title, desc, tag, button, time, color }: any) {
+  return (
+    <div className="bg-[#11141D] border border-[#1F2937] rounded-xl p-6 relative flex gap-6">
+      <div className="absolute left-0 top-0 bottom-0 w-1 rounded-l-xl" style={{ backgroundColor: color }}></div>
+      <div className="w-10 h-10 rounded-full shrink-0" style={{ backgroundColor: color }}></div>
+      <div className="flex-1">
+        <div className="flex justify-between items-start mb-1">
+          <h4 className="text-base font-bold text-white">{title}</h4>
+          <span className="text-[10px] text-[#484F58] font-bold">{time}</span>
+        </div>
+        <p className="text-sm text-[#8B949E] mb-4 max-w-xl leading-relaxed">{desc}</p>
+        {tag && (
+          <span className="text-[9px] font-bold px-3 py-1 rounded border border-[#00E6A4]/30 text-[#00E6A4] bg-[#00E6A4]/5 uppercase tracking-wider">
+            {tag}
+          </span>
+        )}
+        {button && (
+          <button className="bg-[#EF4444] text-[#08090D] text-[9px] font-black px-4 py-1.5 rounded-full tracking-tighter uppercase">
+            {button}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function HotzoneRow({ label, status, dotColor }: any) {
+  return (
+    <div className="flex items-center justify-between border-b border-[#1F2937] pb-4 last:border-0 last:pb-0">
+      <div className="flex items-center gap-3">
+        <div className="w-2 h-2 rounded-full" style={{ backgroundColor: dotColor }}></div>
+        <span className="text-xs font-bold text-[#C9D1D9]">{label}</span>
+      </div>
+      <span className="text-[8px] font-black px-3 py-0.5 rounded-full border border-[#30363D] tracking-widest" style={{ color: dotColor }}>
+        {status}
+      </span>
+    </div>
   );
 }
