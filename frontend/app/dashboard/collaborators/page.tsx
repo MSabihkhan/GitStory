@@ -127,21 +127,23 @@
 
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { DashboardShell } from "@/components/layout/DashboardShell";
+import { useAuth } from "@/lib/use-auth";
+import { Loader2 } from "lucide-react";
+import { api } from "@/lib/api";
 
-// ─── Types ────────────────────────────────────────────────────────────────────
 interface Contributor {
   name: string;
   role: string;
-  avatarBg: string;
-  roleColor: string;
-  roleBorderColor: string;
-  cardTopColor: string;
+  avatar_bg: string;
+  role_color: string;
+  role_border_color: string;
+  card_top_color: string;
   commits: string;
   prs: string;
   impact: string;
-  impactColor: string;
+  impact_color: string;
 }
 
 // ─── Mock Data (matching screenshot exactly) ──────────────────────────────────
@@ -149,74 +151,74 @@ const contributors: Contributor[] = [
   {
     name: "Alex Mercer",
     role: "LEAD ARCHITECT",
-    avatarBg: "#22D2C8",
-    roleColor: "#22D2C8",
-    roleBorderColor: "#22D2C8",
-    cardTopColor: "#22D2C8",
+    avatar_bg: "#22D2C8",
+    role_color: "#22D2C8",
+    role_border_color: "#22D2C8",
+    card_top_color: "#22D2C8",
     commits: "2.4k",
     prs: "182",
     impact: "98%",
-    impactColor: "#22D2C8",
+    impact_color: "#22C55E",
   },
   {
     name: "Jordan Dax",
     role: "SECURITY OPS",
-    avatarBg: "#EF4444",
-    roleColor: "#EF4444",
-    roleBorderColor: "#EF4444",
-    cardTopColor: "#EF4444",
+    avatar_bg: "#EF4444",
+    role_color: "#EF4444",
+    role_border_color: "#EF4444",
+    card_top_color: "#EF4444",
     commits: "1.1k",
     prs: "94",
     impact: "84%",
-    impactColor: "#EF4444",
+    impact_color: "#F59E0B",
   },
   {
     name: "Sam Liao",
     role: "BACKEND DEV",
-    avatarBg: "#22C55E",
-    roleColor: "#22C55E",
-    roleBorderColor: "#22C55E",
-    cardTopColor: "#22C55E",
+    avatar_bg: "#22C55E",
+    role_color: "#22C55E",
+    role_border_color: "#22C55E",
+    card_top_color: "#22C55E",
     commits: "3.8k",
     prs: "420",
     impact: "99%",
-    impactColor: "#22C55E",
+    impact_color: "#22C55E",
   },
   {
     name: "Elena Kostic",
     role: "STAFF ENGINEER",
-    avatarBg: "#94A3B8",
-    roleColor: "#94A3B8",
-    roleBorderColor: "#94A3B8",
-    cardTopColor: "#6366F1",
+    avatar_bg: "#94A3B8",
+    role_color: "#94A3B8",
+    role_border_color: "#94A3B8",
+    card_top_color: "#6366F1",
     commits: "842",
     prs: "56",
     impact: "92%",
-    impactColor: "#94A3B8",
+    impact_color: "#22C55E",
   },
   {
     name: "Rohan Varma",
     role: "DEVOPS",
-    avatarBg: "#A855F7",
-    roleColor: "#A855F7",
-    roleBorderColor: "#A855F7",
-    cardTopColor: "#A855F7",
+    avatar_bg: "#A855F7",
+    role_color: "#A855F7",
+    role_border_color: "#A855F7",
+    card_top_color: "#A855F7",
     commits: "1.2k",
     prs: "210",
     impact: "89%",
-    impactColor: "#A855F7",
+    impact_color: "#F59E0B",
   },
   {
     name: "Ingrid S.",
     role: "FRONTEND LEAD",
-    avatarBg: "#F59E0B",
-    roleColor: "#F59E0B",
-    roleBorderColor: "#F59E0B",
-    cardTopColor: "#F59E0B",
+    avatar_bg: "#F59E0B",
+    role_color: "#F59E0B",
+    role_border_color: "#F59E0B",
+    card_top_color: "#F59E0B",
     commits: "4.5k",
     prs: "512",
     impact: "96%",
-    impactColor: "#F59E0B",
+    impact_color: "#22C55E",
   },
 ];
 
@@ -238,7 +240,7 @@ function ContributorCard({ contributor }: { contributor: Contributor }) {
       <div
         style={{
           height: "3px",
-          backgroundColor: contributor.cardTopColor,
+          backgroundColor: contributor.card_top_color,
           width: "100%",
           flexShrink: 0,
         }}
@@ -260,7 +262,7 @@ function ContributorCard({ contributor }: { contributor: Contributor }) {
             width: "72px",
             height: "72px",
             borderRadius: "50%",
-            backgroundColor: contributor.avatarBg,
+            backgroundColor: contributor.avatar_bg,
             marginBottom: "14px",
             flexShrink: 0,
           }}
@@ -283,7 +285,7 @@ function ContributorCard({ contributor }: { contributor: Contributor }) {
         {/* Role Badge */}
         <div
           style={{
-            border: `1px solid ${contributor.roleBorderColor}`,
+            border: `1px solid ${contributor.role_border_color}`,
             borderRadius: "20px",
             padding: "2px 12px",
             marginBottom: "24px",
@@ -291,7 +293,7 @@ function ContributorCard({ contributor }: { contributor: Contributor }) {
         >
           <span
             style={{
-              color: contributor.roleColor,
+              color: contributor.role_color,
               fontSize: "10px",
               fontWeight: 700,
               letterSpacing: "0.08em",
@@ -379,7 +381,7 @@ function ContributorCard({ contributor }: { contributor: Contributor }) {
               style={{
                 fontSize: "18px",
                 fontWeight: 700,
-                color: contributor.impactColor,
+                color: contributor.impact_color,
                 lineHeight: 1,
               }}
             >
@@ -394,6 +396,59 @@ function ContributorCard({ contributor }: { contributor: Contributor }) {
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 export default function CollaboratorsPage() {
+  const { getAccessToken, isAuthenticated } = useAuth();
+  const [loading, setLoading] = useState(true);
+  const [collaboratorsData, setCollaboratorsData] = useState<Contributor[]>([]);
+
+  useEffect(() => {
+    async function fetchData() {
+      if (!isAuthenticated) {
+        setLoading(false);
+        return;
+      }
+
+      const token = getAccessToken();
+      if (!token) {
+        setLoading(false);
+        return;
+      }
+
+      try {
+        const repos = await api.getRepositories(token);
+        if (repos && (repos as any[]).length > 0) {
+          const firstRepo = (repos as any[])[0];
+          const url = firstRepo.repo_url || firstRepo.url || "";
+
+          if (url) {
+            const data = await api.getCollaborators(token, url);
+            const collabData = data as any;
+            if (collabData?.contributors) {
+              setCollaboratorsData(collabData.contributors);
+            }
+          }
+        }
+      } catch (err) {
+        console.error("Failed to fetch collaborators:", err);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    fetchData();
+  }, [isAuthenticated, getAccessToken]);
+
+  if (loading) {
+    return (
+      <DashboardShell>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100vh", background: "#0D1117" }}>
+          <Loader2 className="w-8 h-8 text-[#00E6A4] animate-spin" />
+        </div>
+      </DashboardShell>
+    );
+  }
+
+  const contributorsToUse = collaboratorsData.length > 0 ? collaboratorsData : contributors;
+
   return (
     <DashboardShell>
       <div
@@ -465,7 +520,7 @@ export default function CollaboratorsPage() {
             marginBottom: "20px",
           }}
         >
-          {contributors.slice(0, 4).map((contributor, index) => (
+          {contributorsToUse.slice(0, 4).map((contributor: Contributor, index: number) => (
             <ContributorCard key={index} contributor={contributor} />
           ))}
         </div>
@@ -478,7 +533,7 @@ export default function CollaboratorsPage() {
             gap: "20px",
           }}
         >
-          {contributors.slice(4).map((contributor, index) => (
+          {contributorsToUse.slice(4).map((contributor: Contributor, index: number) => (
             <ContributorCard key={index} contributor={contributor} />
           ))}
         </div>

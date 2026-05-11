@@ -1,8 +1,44 @@
 "use client";
 
-import React from "react";
-import { ChevronRight } from "lucide-react";
+import React, { useState, useEffect } from "react";
+import { ChevronRight, Loader2 } from "lucide-react";
 import { DashboardShell } from "@/components/layout/DashboardShell";
+import { useAuth } from "@/lib/use-auth";
+import { api } from "@/lib/api";
+
+interface TimelineStory {
+  date: string;
+  category: string;
+  title: string;
+  narrative: string;
+  commits: number;
+  filesChanged: number;
+  linesAdded: number;
+  linesRemoved: number;
+}
+
+interface TimelineData {
+  repo_name: string;
+  total_commits: number;
+  benchmarks: { name: string; value: string }[];
+  stories: TimelineStory[];
+}
+
+const mockTimelineData: TimelineData = {
+  repo_name: "obsidian-core-v2",
+  total_commits: 1248,
+  benchmarks: [
+    { name: "Refactor Density", value: "42%" },
+    { name: "Feature Velocity", value: "3.2x" },
+    { name: "Bug Resolution", value: "94%" },
+    { name: "Tech Debt", value: "12%" },
+  ],
+  stories: [
+    { date: "Oct 24, 2023", category: "ARCHITECTURAL PIVOT", title: "The Genesis of Core-V2", narrative: "The transition began with decoupling of the rendering engine. AI analysis suggests this move reduced build complexity by 42%.", commits: 47, filesChanged: 128, linesAdded: 4820, linesRemoved: 3240 },
+    { date: "Nov 12, 2023", category: "THE GREAT REFACTOR", title: "Visual Synthesis Module", narrative: "Complete rewrite of the authentication module using JWT tokens with refresh token rotation.", commits: 23, filesChanged: 45, linesAdded: 2150, linesRemoved: 1890 },
+    { date: "Dec 05, 2023", category: "CONFLICT RESOLUTION", title: "The Latency Crisis", narrative: "Emergency patch for critical performance issue. Response time improved from 142ms to 8ms.", commits: 5, filesChanged: 8, linesAdded: 340, linesRemoved: 180 },
+  ],
+};
 
 /* ─────────────────────────────────────────────
    EXACT colours extracted from screenshot
@@ -158,8 +194,50 @@ function BottomStatsBar() {
 
 /* ─────────────────────────────────────────────
    MAIN RENDER
-───────────────────────────────────────────── */
+ ───────────────────────────────────────────── */
 export default function TimelinePage() {
+  const { getAccessToken, isAuthenticated } = useAuth();
+  const [loading, setLoading] = useState(true);
+  const [timelineData, setTimelineData] = useState<TimelineData | null>(null);
+
+  useEffect(() => {
+    async function fetchTimeline() {
+      if (!isAuthenticated) {
+        setLoading(false);
+        return;
+      }
+
+      const token = getAccessToken();
+      if (!token) {
+        setLoading(false);
+        return;
+      }
+
+      try {
+        const data = await api.getTimeline(token, "https://github.com/test/repo");
+        setTimelineData(data as TimelineData);
+      } catch (err) {
+        console.error("Failed to fetch timeline:", err);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    fetchTimeline();
+  }, [isAuthenticated, getAccessToken]);
+
+  const displayData = timelineData || mockTimelineData;
+
+  if (loading) {
+    return (
+      <DashboardShell>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "60vh", backgroundColor: C.bg }}>
+          <Loader2 className="w-8 h-8 text-[#00E6A4] animate-spin" />
+        </div>
+      </DashboardShell>
+    );
+  }
+
   return (
     <DashboardShell>
       <div style={{ display: "flex", flexDirection: "column", backgroundColor: C.bg, fontFamily: "sans-serif", overflow: "hidden" }}>
@@ -168,33 +246,67 @@ export default function TimelinePage() {
       <div style={{ flex: 1, overflowY: "auto", padding: "48px 60px" }}>
         <h1 style={{ fontSize: 32, fontWeight: 700, color: C.textPrimary, margin: "0 0 6px 0" }}>Timeline</h1>
         <p style={{ fontSize: 13, color: C.textSecondary, marginBottom: 48 }}>
-          Visualizing the story of <span style={{ color: C.green }}>obsidian-core-v2</span> · 1,248 commits.
+          Visualizing the story of <span style={{ color: C.green }}>{displayData.repo_name}</span> · {displayData.total_commits.toLocaleString()} commits.
         </p>
 
         <div style={{ position: "relative", maxWidth: "1200px", margin: "0 auto" }}>
           {/* Vertical spine line */}
           <div style={{ position: "absolute", left: "50%", top: 0, bottom: 0, width: 1, backgroundColor: C.dotLine, transform: "translateX(-50%)" }} />
 
-          {/* PHASE 1 */}
-          <div style={{ display: "flex", alignItems: "flex-start", marginBottom: 64, position: "relative" }}>
-            <div style={{ flex: 1, paddingRight: 40 }}><Card1 /></div>
-            <div style={{ width: 40, display: "flex", justifyContent: "center", paddingTop: 30 }}><Dot color={C.teal} /></div>
-            <div style={{ flex: 1, paddingLeft: 40, paddingTop: 30 }}><PhaseLabel text="PHASE 01 / INFRASTRUCTURE" /></div>
-          </div>
-
-          {/* PHASE 2 */}
-          <div style={{ display: "flex", alignItems: "flex-start", marginBottom: 64, position: "relative" }}>
-            <div style={{ flex: 1, paddingRight: 40, textAlign: "right", paddingTop: 30 }}><PhaseLabel text="PHASE 02 / REFINEMENT" /></div>
-            <div style={{ width: 40, display: "flex", justifyContent: "center", paddingTop: 30 }}><Dot color={C.purple} /></div>
-            <div style={{ flex: 1, paddingLeft: 40 }}><Card2 /></div>
-          </div>
-
-          {/* PHASE 3 */}
-          <div style={{ display: "flex", alignItems: "flex-start", marginBottom: 64, position: "relative" }}>
-            <div style={{ flex: 1, paddingRight: 40 }}><Card3 /></div>
-            <div style={{ width: 40, display: "flex", justifyContent: "center", paddingTop: 30 }}><Dot color={C.amber} /></div>
-            <div style={{ flex: 1, paddingLeft: 40, paddingTop: 30 }}><PhaseLabel text="PHASE 03 / OPTIMIZATION" /></div>
-          </div>
+          {/* Dynamic stories from API or fallback to mock */}
+          {displayData.stories.slice(0, 3).map((story, index) => {
+            const colors = [C.teal, C.purple, C.amber];
+            const phases = ["PHASE 01 / INFRASTRUCTURE", "PHASE 02 / REFINEMENT", "PHASE 03 / OPTIMIZATION"];
+            const isEven = index % 2 === 1;
+            
+            return (
+              <div key={index} style={{ display: "flex", alignItems: "flex-start", marginBottom: 64, position: "relative" }}>
+                {isEven ? (
+                  <>
+                    <div style={{ flex: 1, paddingRight: 40, textAlign: "right", paddingTop: 30 }}>
+                      <PhaseLabel text={phases[index]} />
+                    </div>
+                    <div style={{ width: 40, display: "flex", justifyContent: "center", paddingTop: 30 }}><Dot color={colors[index]} /></div>
+                    <div style={{ flex: 1, paddingLeft: 40 }}>
+                      <div style={{ backgroundColor: index === 1 ? C.purpleCardBg : C.cardBg, border: `1px solid ${index === 1 ? C.purpleCardBorder : C.cardBorder}`, borderRadius: 12, overflow: "hidden" }}>
+                        <div style={{ height: 2, backgroundColor: colors[index] }} />
+                        <div style={{ padding: "20px 24px 24px" }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }}>
+                            <span style={{ color: index === 1 ? "#A78BFA" : colors[index], fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", padding: "4px 12px", borderRadius: 20, border: `1px solid ${colors[index]}` }}>
+                              {story.category}
+                            </span>
+                            <span style={{ fontSize: 12, color: C.textSecondary }}>{story.date}</span>
+                          </div>
+                          <h3 style={{ fontSize: 18, fontWeight: 700, color: C.textPrimary, margin: "0 0 10px 0" }}>{story.title}</h3>
+                          <p style={{ fontSize: 13, color: C.textSecondary, lineHeight: 1.65, margin: 0 }}>{story.narrative}</p>
+                        </div>
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div style={{ flex: 1, paddingRight: 40 }}>
+                      <div style={{ backgroundColor: index === 1 ? C.purpleCardBg : C.cardBg, border: `1px solid ${index === 1 ? C.purpleCardBorder : C.cardBorder}`, borderRadius: 12, overflow: "hidden" }}>
+                        <div style={{ height: 2, backgroundColor: colors[index] }} />
+                        <div style={{ padding: "20px 24px 24px" }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }}>
+                            <span style={{ backgroundColor: colors[index], color: "#fff", fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", padding: "4px 12px", borderRadius: 20 }}>
+                              {story.category}
+                            </span>
+                            <span style={{ fontSize: 12, color: C.textSecondary }}>{story.date}</span>
+                          </div>
+                          <h3 style={{ fontSize: 18, fontWeight: 700, color: C.textPrimary, margin: "0 0 10px 0" }}>{story.title}</h3>
+                          <p style={{ fontSize: 13, color: C.textSecondary, lineHeight: 1.65, margin: 0 }}>{story.narrative}</p>
+                        </div>
+                      </div>
+                    </div>
+                    <div style={{ width: 40, display: "flex", justifyContent: "center", paddingTop: 30 }}><Dot color={colors[index]} /></div>
+                    <div style={{ flex: 1, paddingLeft: 40, paddingTop: 30 }}><PhaseLabel text={phases[index]} /></div>
+                  </>
+                )}
+              </div>
+            );
+          })}
         </div>
       </div>
 

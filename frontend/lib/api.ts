@@ -53,6 +53,16 @@ export const api = {
       body: JSON.stringify({ refresh_token: refreshToken }),
     }),
 
+  // GitHub OAuth
+  getGithubAuthUrl: () =>
+    fetchApi("/api/auth/github/login"),
+
+  githubCallback: (code: string) =>
+    fetchApi("/api/auth/github/callback", {
+      method: "POST",
+      body: JSON.stringify({ code }),
+    }),
+
   getProfile: (token: string) =>
     fetchApi("/api/auth/me", { token }),
 
@@ -132,6 +142,14 @@ export const api = {
   // Hotzone
   getHotzone: (token: string, repoUrl: string) =>
     fetchApi(`/api/hotzone?repo_url=${encodeURIComponent(repoUrl)}`, { token }),
+
+  // Stats
+  getStats: (token: string, repoUrl: string) =>
+    fetchApi(`/api/stats?repo_url=${encodeURIComponent(repoUrl)}`, { token }),
+
+  // Collaborators
+  getCollaborators: (token: string, repoUrl: string) =>
+    fetchApi(`/api/collaborators?repo_url=${encodeURIComponent(repoUrl)}`, { token }),
 
   // Code Review
   codeReview: (token: string, repoUrl: string, githubToken: string, commitCount: number = 1) =>

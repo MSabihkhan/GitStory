@@ -177,12 +177,30 @@
 
 "use client";
 
-import { useState } from "react";
-import { Plus, ArrowUp } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Plus, ArrowUp, Loader2 } from "lucide-react";
 import { DashboardShell } from "@/components/layout/DashboardShell";
+import { useAuth } from "@/lib/use-auth";
 
 export default function ChatPage() {
+  const { isAuthenticated } = useAuth();
+  const [loading, setLoading] = useState(true);
   const [input, setInput] = useState("");
+
+  useEffect(() => {
+    const timer = setTimeout(() => setLoading(false), 1000);
+    return () => clearTimeout(timer);
+  }, []);
+
+  if (loading) {
+    return (
+      <DashboardShell>
+        <div className="flex items-center justify-center h-[60vh] bg-[#0D1117]">
+          <Loader2 className="w-8 h-8 text-[#00E6A4] animate-spin" />
+        </div>
+      </DashboardShell>
+    );
+  }
 
   return (
     <DashboardShell>

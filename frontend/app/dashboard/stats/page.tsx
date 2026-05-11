@@ -225,10 +225,80 @@
 
 "use client";
 
-import { ArrowRight } from "lucide-react";
+import { useState, useEffect } from "react";
+import { ArrowRight, Loader2 } from "lucide-react";
 import { DashboardShell } from "@/components/layout/DashboardShell";
+import { useAuth } from "@/lib/use-auth";
+import { api } from "@/lib/api";
+
+interface StatsData {
+  build_stability: number;
+  health_score: number;
+  total_commits: string;
+  active_contributors: number;
+  avg_daily_commits: number;
+  commit_frequency: { day: string; production: number; staging: number }[];
+  language_distribution: { name: string; value: number; color: string }[];
+  code_churn: { week: string; churn: number; lines: number }[];
+}
 
 export default function StatsPage() {
+  const { getAccessToken, isAuthenticated } = useAuth();
+  const [loading, setLoading] = useState(true);
+  const [statsData, setStatsData] = useState<StatsData | null>(null);
+  const [repoUrl, setRepoUrl] = useState<string>("");
+
+  useEffect(() => {
+    async function fetchData() {
+      if (!isAuthenticated) {
+        setLoading(false);
+        return;
+      }
+
+      const token = getAccessToken();
+      if (!token) {
+        setLoading(false);
+        return;
+      }
+
+      try {
+        const repos = await api.getRepositories(token);
+        if (repos && (repos as any[]).length > 0) {
+          const firstRepo = (repos as any[])[0];
+          const url = firstRepo.repo_url || firstRepo.url || "";
+          setRepoUrl(url);
+
+          if (url) {
+            const stats = await api.getStats(token, url);
+            setStatsData(stats as StatsData);
+          }
+        }
+      } catch (err) {
+        console.error("Failed to fetch stats:", err);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    fetchData();
+  }, [isAuthenticated, getAccessToken]);
+
+  if (loading) {
+    return (
+      <DashboardShell>
+        <div className="flex items-center justify-center h-[60vh]">
+          <Loader2 className="w-8 h-8 text-[#00E6A4] animate-spin" />
+        </div>
+      </DashboardShell>
+    );
+  }
+
+  const buildStability = statsData?.build_stability ?? 99.9;
+  const healthScore = statsData?.health_score ?? 82;
+  const totalCommits = statsData?.total_commits ?? "12,847";
+  const activeContributors = statsData?.active_contributors ?? 47;
+  const avgDailyCommits = statsData?.avg_daily_commits ?? 156;
+
   return (
     <DashboardShell>
       <div className="min-h-screen bg-[#0D1117] text-[#8B949E] font-sans">
@@ -240,7 +310,7 @@ export default function StatsPage() {
             {/* Left Stat */}
             <div className="bg-[#161B22]/50 border border-[#1F2937] rounded-2xl p-5 w-56 shadow-lg backdrop-blur-sm">
               <div className="text-[10px] font-bold text-[#484F58] uppercase tracking-widest mb-1">Build Stability</div>
-              <div className="text-3xl font-bold text-[#00E6A4] tracking-tight">99.9%</div>
+              <div className="text-3xl font-bold text-[#00E6A4] tracking-tight">{buildStability}%</div>
             </div>
 
             {/* Center Gauge */}
@@ -251,7 +321,7 @@ export default function StatsPage() {
                   <circle cx="50" cy="50" r="42" fill="transparent" stroke="#00E6A4" strokeWidth="8" strokeDasharray="162 264" strokeDashoffset="-33" strokeLinecap="round" />
                 </svg>
                 <div className="flex flex-col items-center text-center z-10 mt-2">
-                  <span className="text-5xl font-bold text-white tracking-tight leading-none">82</span>
+                  <span className="text-5xl font-bold text-white tracking-tight leading-none">{healthScore}</span>
                   <span className="text-[9px] font-bold text-[#484F58] uppercase tracking-[0.2em] mt-2">Health Score</span>
                 </div>
               </div>

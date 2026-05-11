@@ -212,12 +212,21 @@
 
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import * as d3 from "d3";
 import { DashboardShell } from "@/components/layout/DashboardShell";
+import { useAuth } from "@/lib/use-auth";
+import { api } from "@/lib/api";
+import { Loader2 } from "lucide-react";
+
+interface HotzoneData {
+  files: { name: string; value: number; color: string; debt: number }[];
+  top_hotspots: { file: string; meta: string; debt: number; color: string }[];
+  risk_score: number;
+}
 
 // ─── Mock Data ────────────────────────────────────────────────────────────────
-const treemapData = [
+const mockTreemapData = [
   { name: "CORE_API.TS",           value: 340, color: "#EF4444",  debt: 9.4, debtColor: "#EF4444" },
   { name: "AUTH.V2",               value: 180, color: "#F97316",  debt: 8.1, debtColor: "#F97316" },
   { name: "STABLE_INFRASTRUCTURE", value: 220, color: "#1E2530",  debt: 1.0, debtColor: "#6B7280" },
@@ -226,7 +235,7 @@ const treemapData = [
   { name: "STABLE_2",              value: 160, color: "#1E2530",  debt: 0.8, debtColor: "#6B7280" },
 ];
 
-const topHotspots = [
+const mockTopHotspots = [
   { file: "core_api.ts",     meta: "2.4k Lines · 14 Cyclo", debt: 9.4, color: "#EF4444" },
   { file: "legacy_parser.js",meta: "4.1k Lines · 32 Cyclo", debt: 8.1, color: "#F97316" },
   { file: "auth_manager.py", meta: "800 Lines · 8 Cyclo",   debt: 6.7, color: "#8B5CF6" },
@@ -234,7 +243,7 @@ const topHotspots = [
 ];
 
 // ─── Treemap Component ────────────────────────────────────────────────────────
-function Treemap() {
+function Treemap({ data }: { data: typeof mockTreemapData }) {
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -245,13 +254,13 @@ function Treemap() {
     const width = container.clientWidth;
     const height = container.clientHeight || 560;
 
-    const data = {
+    const hierarchyData = {
       name: "root",
-      children: treemapData.map((d) => ({ ...d })),
+      children: data.map((d) => ({ ...d })),
     };
 
     const root = d3
-      .hierarchy(data)
+      .hierarchy(hierarchyData)
       .sum((d: any) => d.value)
       .sort((a, b) => (b.value || 0) - (a.value || 0));
 
@@ -321,6 +330,53 @@ function Treemap() {
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function HotzonesPage() {
+  const { getAccessToken, isAuthenticated } = useAuth();
+  const [loading, setLoading] = useState(true);
+  const [hotzoneData, setHotzoneData] = useState<HotzoneData | null>(null);
+
+  useEffect(() => {
+    async function fetchHotzones() {
+      if (!isAuthenticated) {
+        setLoading(false);
+        return;
+      }
+
+      const token = getAccessToken();
+      if (!token) {
+        setLoading(false);
+        return;
+      }
+
+      try {
+        const data = await api.getHotzone(token, "https://github.com/test/repo");
+        setHotzoneData(data as HotzoneData);
+      } catch (err) {
+        console.error("Failed to fetch hotzones:", err);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    fetchHotzones();
+  }, [isAuthenticated, getAccessToken]);
+
+  const treemapDataToUse = (hotzoneData?.files || mockTreemapData).map((f: any) => ({
+    ...f,
+    debtColor: f.color
+  }));
+  const topHotspotsToUse = hotzoneData?.top_hotspots || mockTopHotspots;
+  const riskScore = hotzoneData?.risk_score || 74.2;
+
+  if (loading) {
+    return (
+      <DashboardShell>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100vh", background: "#0D1117" }}>
+          <Loader2 className="w-8 h-8 text-[#10B981] animate-spin" />
+        </div>
+      </DashboardShell>
+    );
+  }
+
   return (
     <DashboardShell>
       <div
@@ -387,7 +443,7 @@ export default function HotzonesPage() {
 
           {/* Treemap */}
           <div style={{ flex: 1, minHeight: 0 }}>
-            <Treemap />
+            <Treemap data={treemapDataToUse} />
           </div>
 
           {/* Bottom legend */}
@@ -465,7 +521,7 @@ export default function HotzonesPage() {
                 letterSpacing: "-0.02em",
               }}
             >
-              74.2
+              {riskScore}
             </div>
 
             {/* Progress bar */}
@@ -480,7 +536,7 @@ export default function HotzonesPage() {
             >
               <div
                 style={{
-                  width: "74.2%",
+                  width: `${riskScore}%`,
                   height: "100%",
                   background: "#10B981",
                   borderRadius: 2,
@@ -516,7 +572,7 @@ export default function HotzonesPage() {
             </div>
 
             <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
-              {topHotspots.map((h, i) => (
+              {topHotspotsToUse.map((h: any, i: number) => (
                 <div
                   key={i}
                   style={{
@@ -524,7 +580,7 @@ export default function HotzonesPage() {
                     alignItems: "center",
                     justifyContent: "space-between",
                     padding: "14px 0",
-                    borderBottom: i < topHotspots.length - 1 ? "1px solid #21262D" : "none",
+                    borderBottom: i < topHotspotsToUse.length - 1 ? "1px solid #21262D" : "none",
                   }}
                 >
                   {/* Left: bar + info */}
