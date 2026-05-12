@@ -1,630 +1,180 @@
-"use client";
-
-import { useState, useRef, useEffect, useCallback } from "react";
-import Leaderboard from '../components/Leaderboard';
-import { useState } from "react";
-import { signIn, signOut, useSession, SessionProvider } from "next-auth/react";
 import Link from "next/link";
+import { ArrowRight, CheckCircle, Zap, MessageSquare, GitBranch } from "lucide-react";
 
-const API = "http://localhost:8000";
-
-export default function Home() {
+export default function LandingPage() {
   return (
-    <SessionProvider>
-      <GitStoryDashboard />
-    </SessionProvider>
-  );
-}
-
-// ─── Types ────────────────────────────────────────────────────────────────────
-
-type Repo = { name: string; private: boolean };
-type Message = { role: "user" | "assistant"; content: string };
-
-// ─── Main Dashboard ───────────────────────────────────────────────────────────
-
-function GitStoryDashboard() {
-  const { data: session }: any = useSession();
-
-  // Analyse panel state
-  const [publicUrl, setPublicUrl] = useState("");
-  const [userRepos, setUserRepos] = useState<Repo[]>([]);
-  const [analyzeResults, setAnalyzeResults] = useState<any>(null);
-  const [analyzeLoading, setAnalyzeLoading] = useState(false);
-
-  // Index panel state
-  const [indexUrl, setIndexUrl] = useState("");
-  const [indexJobId, setIndexJobId] = useState<string | null>(null);
-  const [indexStatus, setIndexStatus] = useState<string>("");
-  const [indexedRepos, setIndexedRepos] = useState<string[]>([]);
-  const [indexLoading, setIndexLoading] = useState(false);
-
-  // Chat panel state
-  const [selectedRepo, setSelectedRepo] = useState<string>("");
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [chatInput, setChatInput] = useState("");
-  const [chatLoading, setChatLoading] = useState(false);
-  const chatBottomRef = useRef<HTMLDivElement>(null);
-
-  // ── Fetch indexed repos on mount ──────────────────────────────────────────
-  const refreshIndexedRepos = useCallback(async () => {
-    try {
-      const res = await fetch(`${API}/indexed-repos`);
-      const data = await res.json();
-      setIndexedRepos(data.repos ?? []);
-    } catch {
-      // server not running yet — ignore
-    }
-  }, []);
-
-  useEffect(() => { refreshIndexedRepos(); }, [refreshIndexedRepos]);
-
-  // Auto-scroll chat to bottom
-  useEffect(() => {
-    chatBottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
-
-  // ── Poll index job status ─────────────────────────────────────────────────
-  useEffect(() => {
-    if (!indexJobId) return;
-    const interval = setInterval(async () => {
-      try {
-        const res = await fetch(`${API}/index-repo/status/${indexJobId}`);
-        const data = await res.json();
-        setIndexStatus(data.status);
-        if (data.status === "done") {
-          clearInterval(interval);
-          setIndexJobId(null);
-          setIndexLoading(false);
-          setIndexStatus("");
-          refreshIndexedRepos();
-          alert(`Repo '${data.repo_name}' has been indexed! You can now chat with it.`);
-        } else if (data.status === "error") {
-          clearInterval(interval);
-          setIndexJobId(null);
-          setIndexLoading(false);
-          setIndexStatus("");
-          alert(`Indexing failed: ${data.error}`);
-        }
-      } catch {
-        clearInterval(interval);
-        setIndexLoading(false);
-      }
-    }, 3000);
-    return () => clearInterval(interval);
-  }, [indexJobId, refreshIndexedRepos]);
-
-  // ── API Helpers ───────────────────────────────────────────────────────────
-
-  const fetchMyRepos = async () => {
-    setAnalyzeLoading(true);
-    try {
-      const res = await fetch(`${API}/get-repos`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token: session.accessToken }),
-      });
-      const data = await res.json();
-      setUserRepos(data.repos ?? []);
-    } catch {
-      alert("Error fetching repos. Is the Python server running?");
-    }
-    setAnalyzeLoading(false);
-  };
-
-  const analyzeRepo = async (target: string, isPrivate: boolean) => {
-    setAnalyzeLoading(true);
-    setAnalyzeResults(null);
-    try {
-      const res = await fetch(`${API}/analyze`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          repo_target: target,
-          token: session?.accessToken ?? null,
-          is_private: isPrivate,
-        }),
-      });
-      const data = await res.json();
-      setAnalyzeResults(data);
-    } catch {
-      alert("Analysis failed. Check the Python terminal for errors.");
-    }
-    setAnalyzeLoading(false);
-  };
-
-  const startIndexing = async () => {
-    if (!indexUrl.trim()) return alert("Enter a GitHub URL to index.");
-    setIndexLoading(true);
-    setIndexStatus("pending");
-    try {
-      const res = await fetch(`${API}/index-repo`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          repo_url: indexUrl.trim(),
-          token: session?.accessToken ?? null,
-          is_private: false,
-        }),
-      });
-      const data = await res.json();
-      setIndexJobId(data.job_id);
-    } catch {
-      alert("Failed to start indexing.");
-      setIndexLoading(false);
-      setIndexStatus("");
-    }
-  };
-
-  const sendMessage = async () => {
-    if (!chatInput.trim() || !selectedRepo) return;
-    const userMsg = chatInput.trim();
-    setChatInput("");
-    setMessages((prev) => [...prev, { role: "user", content: userMsg }]);
-    setChatLoading(true);
-
-    // Add a placeholder assistant message we'll stream into
-    setMessages((prev) => [...prev, { role: "assistant", content: "" }]);
-
-    try {
-      const res = await fetch(`${API}/chat`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: userMsg, repo_name: selectedRepo }),
-      });
-
-      if (!res.ok) {
-        const err = await res.json();
-        setMessages((prev) => {
-          const updated = [...prev];
-          updated[updated.length - 1] = {
-            role: "assistant",
-            content: `Error: ${err.detail}`,
-          };
-          return updated;
-        });
-        setChatLoading(false);
-        return;
-      }
-
-      const reader = res.body!.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-
-      while (true) {
-        const { value, done } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-
-        // SSE events are separated by "\n\n"
-        const parts = buffer.split("\n\n");
-        buffer = parts.pop() ?? "";
-
-        for (const part of parts) {
-          const line = part.trim();
-          if (!line.startsWith("data: ")) continue;
-          const payload = line.slice(6);
-          if (payload === "[DONE]") break;
-          try {
-            const parsed = JSON.parse(payload);
-            if (parsed.token) {
-              setMessages((prev) => {
-                const updated = [...prev];
-                updated[updated.length - 1] = {
-                  role: "assistant",
-                  content: updated[updated.length - 1].content + parsed.token,
-                };
-                return updated;
-              });
-            }
-          } catch {
-            // malformed chunk — skip
-          }
-        }
-      }
-    } catch (err) {
-      setMessages((prev) => {
-        const updated = [...prev];
-        updated[updated.length - 1] = {
-          role: "assistant",
-          content: "Network error — is the Python server running?",
-        };
-        return updated;
-      });
-    }
-
-    setChatLoading(false);
-  };
-
-  const resetChat = async () => {
-    if (!selectedRepo) return;
-    await fetch(`${API}/chat/reset`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ repo_name: selectedRepo }),
-    });
-    setMessages([]);
-  };
-
-  // ── Render ────────────────────────────────────────────────────────────────
-
-  return (
-    <div style={styles.page}>
-      <div style={{ display: 'flex', justifyContent: 'center', gap: '20px', marginBottom: '20px' }}>
-        <Link href="/" style={{ fontWeight: 700, color: '#2563eb' }}>Dashboard</Link>
-        <Link href="/timeline" style={{ color: '#6b7280' }}>Timeline</Link>
-        <Link href="/hotzone" style={{ color: '#6b7280' }}>Hotzone</Link>
-        <Link href="/review" style={{ color: '#6b7280' }}>Review</Link>
-      </div>
-
-      <h1 style={styles.title}>GitStory</h1>
-      <p style={styles.subtitle}>Mine, Index, and Chat with any GitHub Repository</p>
-
-      {/* ── Row 1: Analyse + Private Vault ─────────────────────────────── */}
-      <div style={styles.row}>
-        {/* Analyse Panel */}
-        <div style={styles.card}>
-          <h2 style={styles.cardTitle}>Analyse Repo</h2>
-          <p style={styles.hint}>Surface-level stats via PyGithub + PyDriller</p>
-          <input
-            style={styles.input}
-            type="text"
-            placeholder="https://github.com/owner/repo"
-            value={publicUrl}
-            onChange={(e) => setPublicUrl(e.target.value)}
-          />
-          <button
-            style={{ ...styles.btn, background: "#2563eb" }}
-            onClick={() => analyzeRepo(publicUrl, false)}
-            disabled={analyzeLoading}
-          >
-            {analyzeLoading ? "Analysing..." : "Analyse Public Repo"}
-          </button>
-
-          {!session ? (
-            <button
-              style={{ ...styles.btn, background: "#111", marginTop: 8 }}
-              onClick={() => signIn("github")}
+    <div className="min-h-screen bg-[#08090D]">
+      {/* Header */}
+      <header className="bg-[#08090D] border-b border-[#1F2937]">
+        <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <a 
+              href="https://github.com" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="text-white hover:text-[#00E6A4] transition-colors"
             >
-              Login with GitHub for Private Repos
-            </button>
-          ) : (
-            <>
-              <p style={{ margin: "8px 0 4px", fontSize: 13 }}>
-                Logged in as <strong>{session.user?.name}</strong>{" "}
-                <span
-                  style={{ color: "red", cursor: "pointer", fontSize: 12 }}
-                  onClick={() => signOut()}
-                >
-                  (logout)
-                </span>
-              </p>
-              <button
-                style={{ ...styles.btn, background: "#16a34a" }}
-                onClick={fetchMyRepos}
-                disabled={analyzeLoading}
-              >
-                Fetch My Repos
-              </button>
-              <div style={styles.repoList}>
-                {userRepos.map((r, i) => (
-                  <button
-                    key={i}
-                    style={styles.repoItem}
-                    onClick={() => analyzeRepo(r.name, r.private)}
-                  >
-                    {r.private ? "🔒" : "🌍"} {r.name}
-                  </button>
-                ))}
-              </div>
-            </>
-          )}
-        </div>
-
-        {/* Index Panel */}
-        <div style={styles.card}>
-          <h2 style={styles.cardTitle}>Index Repo for RAG</h2>
-          <p style={styles.hint}>
-            Clones, summarises, chunks, and embeds a repo into ChromaDB so you can chat with it.
-          </p>
-          <input
-            style={styles.input}
-            type="text"
-            placeholder="https://github.com/owner/repo"
-            value={indexUrl}
-            onChange={(e) => setIndexUrl(e.target.value)}
-          />
-          <button
-            style={{ ...styles.btn, background: "#7c3aed" }}
-            onClick={startIndexing}
-            disabled={indexLoading}
-          >
-            {indexLoading
-              ? `Indexing... (${indexStatus})`
-              : "Start Indexing"}
-          </button>
-
-          {indexedRepos.length > 0 && (
-            <div style={{ marginTop: 16 }}>
-              <p style={{ fontSize: 13, fontWeight: 600, margin: "0 0 6px" }}>
-                Already indexed:
-              </p>
-              <div style={styles.repoList}>
-                {indexedRepos.map((r) => (
-                  <button
-                    key={r}
-                    style={{
-                      ...styles.repoItem,
-                      background: selectedRepo === r ? "#ddd6fe" : "#f3f4f6",
-                      fontWeight: selectedRepo === r ? 700 : 400,
-                    }}
-                    onClick={() => setSelectedRepo(r)}
-                  >
-                    🗂 {r}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* ── Analyse Results ──────────────────────────────────────────────── */}
-      {analyzeResults && (
-        <div style={{ marginTop: 24 }}>
-          {analyzeResults.detail ? (
-            <div style={styles.errorBox}>
-              <strong>Error:</strong> {analyzeResults.detail}
-            </div>
-          ) : (
-            <AnalyzeResults data={analyzeResults} />
-          )}
-        </div>
-      )}
-
-        {/* IF PYTHON SENDS SUCCESS DATA, SHOW IT IN GREEN! */}
-        {results && results.status === "Success" && (
-          <div style={{ padding: "20px", background: "#1e1e1e", color: "#00ff00", borderRadius: "10px", overflowX: "auto" }}>
-            <h3>📊 Extracted Data for: {results.repo_analyzed}</h3>
-            <pre style={{ fontSize: "14px" }}>
-              {JSON.stringify(results.data, null, 2)}
-            </pre>
-            {/* Only show the leaderboard IF we have results from the server */}
-            {results && results.data && results.data.top_contributors && (
-              <div className="mt-8 flex justify-center">
-                <Leaderboard contributors={results.data.top_contributors} />
-              </div>
-            )}
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
+              </svg>
+            </a>
+            <span className="text-xl font-semibold text-white tracking-[0.15em] uppercase text-[10px]">GITSTORY</span>
           </div>
-        )}
-      </div>
-    </div>
-  );
-}
+          <nav className="hidden md:flex items-center gap-8">
+            <Link href="#features" className="text-sm text-[#484F58] hover:text-[#C9D1D9] transition-colors">Features</Link>
+            <Link href="/login" className="text-sm text-[#484F58] hover:text-[#C9D1D9] transition-colors">Sign In</Link>
+            <Link href="/signup" className="px-4 py-2 bg-[#00E6A4] text-[#08090D] text-sm font-bold rounded-lg hover:opacity-90 transition-opacity">
+              Get Started
+            </Link>
+          </nav>
+        </div>
+      </header>
 
-// ─── Sub-components ───────────────────────────────────────────────────────────
+      {/* Hero Section */}
+      <section className="relative overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-b from-[#08090D] via-[#0A0A0F] to-[#08090D]" />
+        <div className="relative max-w-7xl mx-auto px-6 py-24 text-center">
+          <div className="inline-flex items-center gap-2 px-4 py-2 bg-[#00E6A4]/10 border border-[#00E6A4]/20 rounded-full mb-8">
+            <Zap size={14} className="text-[#00E6A4]" />
+            <span className="text-sm text-[#00E6A4] font-medium">Powered by AI</span>
+          </div>
+          <h1 className="text-5xl md:text-6xl font-bold text-white mb-6 leading-tight">
+            Mine, Index, and Chat with any{' '}
+            <span className="bg-gradient-to-r from-[#00E6A4] to-[#00B386] bg-clip-text text-transparent">
+              GitHub Repository
+            </span>
+          </h1>
+          <p className="text-lg text-[#8B949E] max-w-2xl mx-auto mb-10">
+            Transform how you understand codebases. GitStory mines commit history, indexes repository structure, and lets you query anything through natural language.
+          </p>
+          <div className="flex items-center justify-center gap-4 mb-16">
+            <Link href="/signup" className="px-6 py-3 bg-[#00E6A4] text-[#08090D] font-bold rounded-lg hover:opacity-90 transition-opacity flex items-center gap-2">
+              Start For Free <ArrowRight size={18} />
+            </Link>
+          </div>
 
-function ChatBubble({ role, content }: { role: "user" | "assistant"; content: string }) {
-  const isUser = role === "user";
-  return (
-    <div
-      style={{
-        display: "flex",
-        justifyContent: isUser ? "flex-end" : "flex-start",
-        marginBottom: 12,
-      }}
-    >
-      <div
-        style={{
-          maxWidth: "80%",
-          padding: "10px 14px",
-          borderRadius: isUser ? "18px 18px 4px 18px" : "18px 18px 18px 4px",
-          background: isUser ? "#2563eb" : "#f3f4f6",
-          color: isUser ? "#fff" : "#111",
-          fontSize: 14,
-          lineHeight: 1.6,
-          whiteSpace: "pre-wrap",
-          wordBreak: "break-word",
-        }}
-      >
-        {content || <span style={{ opacity: 0.4 }}>▌</span>}
-      </div>
-    </div>
-  );
-}
-
-function AnalyzeResults({ data }: { data: any }) {
-  const d = data.data;
-  const langs = Object.entries(d.languages ?? {}) as [string, number][];
-  const totalBytes = langs.reduce((s, [, v]) => s + v, 0);
-  const contributors = Object.entries(d.top_contributors ?? {}) as [string, number][];
-  const hotfiles = Object.entries(d.file_hotzones ?? {})
-    .sort(([, a], [, b]) => (b as number) - (a as number))
-    .slice(0, 5) as [string, number][];
-
-  return (
-    <div style={{ ...styles.card, background: "#0f172a", color: "#e2e8f0" }}>
-      <h3 style={{ margin: "0 0 16px", fontSize: 18 }}>
-        Analysis: <span style={{ color: "#818cf8" }}>{data.repo_analyzed}</span>
-      </h3>
-
-      <div style={styles.statsGrid}>
-        {/* Languages */}
-        <div>
-          <p style={styles.statLabel}>Languages</p>
-          {langs.map(([lang, bytes]) => (
-            <div key={lang} style={{ marginBottom: 6 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13 }}>
-                <span>{lang}</span>
-                <span>{((bytes / totalBytes) * 100).toFixed(1)}%</span>
+          {/* Commit Visualization */}
+          <div className="max-w-4xl mx-auto">
+            <div className="bg-[#11141D] border border-[#1F2937] rounded-xl p-6">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-3 h-3 rounded-full bg-[#DA3633]" />
+                <div className="w-3 h-3 rounded-full bg-[#D29922]" />
+                <div className="w-3 h-3 rounded-full bg-[#22C55E]" />
+                <span className="ml-2 text-sm text-[#8B949E]">commit-history.ts</span>
               </div>
-              <div style={{ height: 4, background: "#1e293b", borderRadius: 2, overflow: "hidden" }}>
-                <div
-                  style={{
-                    height: "100%",
-                    width: `${(bytes / totalBytes) * 100}%`,
-                    background: "#818cf8",
-                    borderRadius: 2,
-                  }}
-                />
+              <div className="space-y-3">
+                <div className="flex items-center gap-4">
+                  <span className="text-xs text-[#484F58] font-mono w-24">2h ago</span>
+                  <span className="w-2 h-2 rounded-full bg-[#00E6A4]" />
+                  <span className="text-sm text-white">feat: Add RAG-based code query endpoint</span>
+                </div>
+                <div className="flex items-center gap-4">
+                  <span className="text-xs text-[#484F58] font-mono w-24">5h ago</span>
+                  <span className="w-2 h-2 rounded-full bg-[#22C55E]" />
+                  <span className="text-sm text-white">refactor: Simplify embedding pipeline</span>
+                </div>
+                <div className="flex items-center gap-4">
+                  <span className="text-xs text-[#484F58] font-mono w-24">1d ago</span>
+                  <span className="w-2 h-2 rounded-full bg-[#F59E0B]" />
+                  <span className="text-sm text-white">fix: Resolve token limit issue</span>
+                </div>
               </div>
             </div>
-          ))}
+          </div>
         </div>
+      </section>
 
-        {/* Contributors */}
-        <div>
-          <p style={styles.statLabel}>Top Contributors</p>
-          {contributors.sort(([,a],[,b]) => b-a).slice(0,5).map(([name, count]) => (
-            <div key={name} style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginBottom: 4 }}>
-              <span>{name}</span>
-              <span style={{ color: "#a5b4fc" }}>{count} commits</span>
+      {/* Problem Section */}
+      <section className="bg-[#08090D] py-20">
+        <div className="max-w-7xl mx-auto px-6">
+          <div className="text-center mb-16">
+            <h2 className="text-3xl font-bold text-white mb-4">Understanding codebases is hard</h2>
+            <p className="text-[#8B949E] max-w-2xl mx-auto">
+              Hours spent reading documentation, tracing dependencies, and searching through commit history — time that could be spent building.
+            </p>
+          </div>
+          <div className="grid md:grid-cols-3 gap-6">
+            {[
+              { title: "Drowning in Code", desc: "Million-line codebases with no clear entry point or architecture." },
+              { title: "Lost Context", desc: "Important decisions buried in commit messages and PR comments." },
+              { title: "Siloed Knowledge", desc: "Only a few people truly understand how parts of the system work." },
+            ].map((item, i) => (
+              <div key={i} className="bg-[#11141D] border border-[#1F2937] rounded-xl p-6">
+                <div className="w-10 h-10 rounded-lg bg-[#F85149]/10 flex items-center justify-center mb-4">
+                  <MessageSquare size={18} className="text-[#F85149]" />
+                </div>
+                <h3 className="text-lg font-semibold text-white mb-2">{item.title}</h3>
+                <p className="text-sm text-[#8B949E]">{item.desc}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Features Section */}
+      <section id="features" className="bg-[#08090D] py-20">
+        <div className="max-w-7xl mx-auto px-6">
+          <div className="text-center mb-16">
+            <h2 className="text-3xl font-bold text-white mb-4">Everything you need to understand code</h2>
+            <p className="text-[#8B949E]">Powerful tools built for developers who value their time.</p>
+          </div>
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {[
+              { icon: GitBranch, title: "Git Analytics", desc: "Deep insights into commit patterns, contributor behavior, and code evolution over time." },
+              { icon: MessageSquare, title: "Natural Language Query", desc: "Ask questions about your codebase in plain English and get precise, cited answers." },
+              { icon: Zap, title: "Instant Indexing", desc: "Full repository structure indexed in minutes, including file relationships and dependencies." },
+              { icon: CheckCircle, title: "Health Scoring", desc: "Automated code health metrics including complexity, churn, and maintainability scores." },
+              { icon: MessageSquare, title: "Contextual Narratives", desc: "AI-generated summaries that explain WHY code was written, not just what it does." },
+              { icon: CheckCircle, title: "Collaborator Insights", desc: "Understand team dynamics with contributor stats, PR patterns, and review behavior." },
+            ].map((feature, i) => (
+              <div key={i} className="bg-[#11141D] border border-[#1F2937] rounded-xl p-6 hover:border-[#30363D] transition-colors">
+                <div className="w-10 h-10 rounded-lg bg-[#00E6A4]/10 flex items-center justify-center mb-4">
+                  <feature.icon size={18} className="text-[#00E6A4]" />
+                </div>
+                <h3 className="text-lg font-semibold text-white mb-2">{feature.title}</h3>
+                <p className="text-sm text-[#8B949E]">{feature.desc}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* CTA Section */}
+      <section className="bg-[#08090D] py-20">
+        <div className="max-w-7xl mx-auto px-6 text-center">
+          <h2 className="text-3xl font-bold text-white mb-4">Ready to understand your codebase?</h2>
+          <p className="text-[#8B949E] mb-8">Start mining and indexing repositories in minutes.</p>
+          <Link href="/signup" className="inline-flex items-center gap-2 px-8 py-4 bg-[#00E6A4] text-[#08090D] font-bold rounded-lg hover:opacity-90 transition-opacity">
+            Get Started Free <ArrowRight size={18} />
+          </Link>
+        </div>
+      </section>
+
+      {/* Footer */}
+      <footer className="bg-[#08090D] border-t border-[#1F2937] py-12">
+        <div className="max-w-7xl mx-auto px-6">
+          <div className="flex flex-col md:flex-row items-center justify-between gap-6">
+            <div className="flex items-center gap-3">
+            <a 
+              href="https://github.com" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="text-white hover:text-[#00E6A4] transition-colors"
+            >
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
+              </svg>
+            </a>
+            <span className="text-lg font-semibold text-white">GITSTORY</span>
+          </div>
+            <div className="flex items-center gap-6 text-sm text-[#8B949E]">
+              <Link href="#" className="hover:text-white transition-colors">Privacy Policy</Link>
+              <Link href="#" className="hover:text-white transition-colors">Terms of Service</Link>
             </div>
-          ))}
+            <p className="text-sm text-[#484F58]">© 2026 GitStory. All rights reserved.</p>
+          </div>
         </div>
-
-        {/* Hotfiles */}
-        <div>
-          <p style={styles.statLabel}>Hottest Files</p>
-          {hotfiles.map(([file, count]) => (
-            <div key={file} style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 4 }}>
-              <span style={{ color: "#94a3b8", fontFamily: "monospace", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "70%" }}>{file}</span>
-              <span style={{ color: "#f97316" }}>{count}x</span>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Recent commits */}
-      <p style={{ ...styles.statLabel, marginTop: 16 }}>Recent Commits</p>
-      {(d.recent_commits ?? []).slice(0, 5).map((c: any, i: number) => (
-        <div key={i} style={{ borderLeft: "2px solid #334155", paddingLeft: 10, marginBottom: 8 }}>
-          <p style={{ margin: 0, fontSize: 13, color: "#e2e8f0" }}>{c.message}</p>
-          <p style={{ margin: 0, fontSize: 11, color: "#64748b" }}>{c.author} · {c.date?.slice(0, 10)}</p>
-        </div>
-      ))}
+      </footer>
     </div>
   );
 }
-
-// ─── Styles ───────────────────────────────────────────────────────────────────
-
-const styles: Record<string, React.CSSProperties> = {
-  page: {
-    maxWidth: 960,
-    margin: "0 auto",
-    padding: "40px 20px",
-    fontFamily: "system-ui, -apple-system, sans-serif",
-  },
-  title: {
-    textAlign: "center",
-    fontSize: "2.4rem",
-    fontWeight: 700,
-    margin: 0,
-  },
-  subtitle: {
-    textAlign: "center",
-    color: "#6b7280",
-    marginTop: 6,
-    marginBottom: 32,
-  },
-  row: {
-    display: "flex",
-    gap: 20,
-  },
-  card: {
-    flex: 1,
-    padding: 20,
-    border: "1px solid #e5e7eb",
-    borderRadius: 12,
-    background: "#fff",
-  },
-  cardTitle: {
-    margin: "0 0 4px",
-    fontSize: 17,
-    fontWeight: 600,
-  },
-  hint: {
-    fontSize: 13,
-    color: "#6b7280",
-    margin: "0 0 12px",
-  },
-  input: {
-    width: "100%",
-    padding: "9px 12px",
-    marginBottom: 8,
-    borderRadius: 6,
-    border: "1px solid #d1d5db",
-    fontSize: 14,
-    boxSizing: "border-box" as const,
-  },
-  btn: {
-    width: "100%",
-    padding: "10px 0",
-    border: "none",
-    borderRadius: 6,
-    color: "#fff",
-    fontSize: 14,
-    fontWeight: 600,
-    cursor: "pointer",
-    marginBottom: 4,
-  },
-  ghostBtn: {
-    background: "none",
-    border: "1px solid #d1d5db",
-    borderRadius: 6,
-    padding: "4px 10px",
-    fontSize: 13,
-    cursor: "pointer",
-    color: "#374151",
-  },
-  repoList: {
-    maxHeight: 180,
-    overflowY: "auto",
-    display: "flex",
-    flexDirection: "column",
-    gap: 4,
-    marginTop: 8,
-  },
-  repoItem: {
-    padding: "7px 10px",
-    textAlign: "left",
-    background: "#f3f4f6",
-    border: "1px solid #e5e7eb",
-    borderRadius: 6,
-    cursor: "pointer",
-    fontSize: 13,
-  },
-  chatWindow: {
-    height: 400,
-    overflowY: "auto",
-    background: "#f9fafb",
-    borderRadius: 8,
-    padding: 16,
-    display: "flex",
-    flexDirection: "column",
-    border: "1px solid #e5e7eb",
-  },
-  errorBox: {
-    padding: 16,
-    background: "#fef2f2",
-    border: "1px solid #fca5a5",
-    borderRadius: 8,
-    color: "#991b1b",
-    fontSize: 14,
-  },
-  statsGrid: {
-    display: "grid",
-    gridTemplateColumns: "1fr 1fr 1fr",
-    gap: 20,
-  },
-  statLabel: {
-    fontSize: 12,
-    fontWeight: 600,
-    textTransform: "uppercase" as const,
-    letterSpacing: "0.05em",
-    color: "#64748b",
-    marginBottom: 8,
-    marginTop: 0,
-  },
-};

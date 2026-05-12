@@ -1,26 +1,77 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-page-bg: #0D1117;
+  --color-page-bg-secondary: #161B22;
+  --color-sidebar-bg: #161B22;
+  --color-sidebar-border: #30363D;
+  --color-card-bg: #161B22;
+  --color-card-border: #30363D;
+  --color-card-hover: #1C2128;
+  --color-accent-primary: #8B5CF6;
+  --color-accent-primary-hover: #7C3AED;
+  --color-accent-secondary: #F59E0B;
+  --color-accent-success: #22C55E;
+  --color-accent-blue: #3B82F6;
+  --color-accent-cyan: #06B6D4;
+  --color-accent-pink: #EC4899;
+  --color-accent-orange: #F59E0B;
+  --color-accent-critical: #DA3633;
+  --color-accent-critical-dark: #F85149;
+  --color-accent-warning: #D29922;
+  --color-accent-warning-dark: #9A6700;
+  --color-accent-info: #58A6FF;
+  --color-text-heading: #F8FAFC;
+  --color-text-primary: #F0F6FC;
+  --color-text-secondary: #8B949E;
+  --color-text-muted: #484F58;
+  --color-border-default: #30363D;
+  --color-border-focus: #8B5CF6;
+  --color-landing-hero-start: #0F0F1A;
+  --color-landing-hero-end: #1A1A2E;
+  --color-landing-card-border: #1E293B;
+  --color-status-critical-bg: #3F1E1E;
+  --color-status-critical-text: #F85149;
+  --color-status-warning-bg: #3E2D1E;
+  --color-status-warning-text: #D29922;
+  --color-status-info-bg: #1E3A5F;
+  --color-status-info-text: #58A6FF;
+  --color-collab-feature-lead: #22D2D2;
+  --color-collab-doc-guru: #A855F7;
+  --color-collab-devops: #22C55E;
+  --color-collab-perf: #F59E0B;
+  --color-hotzone-stable: #22C55E;
+  --color-hotzone-low: #84CC16;
+  --color-hotzone-medium: #F59E0B;
+  --color-hotzone-high: #F97316;
+  --color-hotzone-critical: #EF4444;
+  --color-cat-src: #3B82F6;
+  --color-cat-lib: #8B5CF6;
+  --color-cat-api: #F59E0B;
+  --color-timeline-refactor: #3B82F6;
+  --color-timeline-milestone: #22C55E;
+  --color-timeline-data: #F59E0B;
+  --color-timeline-hotfix: #DA3633;
+  --color-chart-prod: #3B82F6;
+  --color-chart-staging: #8B5CF6;
+  --color-chart-churn: #EC4899;
+  --color-chart-churn-secondary: #06B6D4;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --shadow-card: 0 4px 6px -1px rgba(0, 0, 0, 0.2), 0 2px 4px -2px rgba(0, 0, 0, 0.2);
+  --shadow-glow-primary: 0 0 20px rgba(139, 92, 246, 0.3);
+  --shadow-glow-success: 0 0 20px rgba(34, 197, 94, 0.3);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+:root {
+  --background: #0D1117;
+  --foreground: #F0F6FC;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: Inter, system-ui, sans-serif;
 }

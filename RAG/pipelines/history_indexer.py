@@ -1,7 +1,13 @@
 # pipelines/history_indexer.py
+import os
+import sys
+
+RAG_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, RAG_DIR)
+
 from pydriller import Repository
 from core.vector_store import GitStoryDB
-from config import MAX_COMMITS, COMMIT_DIFF_MAX_CHARS
+from rag_config import MAX_COMMITS, COMMIT_DIFF_MAX_CHARS
 
 def index_commit_history(clone_path: str, db: GitStoryDB):
     """

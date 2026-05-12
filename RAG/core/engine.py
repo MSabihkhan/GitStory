@@ -5,7 +5,7 @@ import json
 import os
 from dotenv import load_dotenv
 from core.vector_store import GitStoryDB
-from config import MODEL
+from rag_config import MODEL
 
 load_dotenv()
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")

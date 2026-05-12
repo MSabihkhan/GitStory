@@ -1,4 +1,9 @@
 import os
+import sys
+
+RAG_DIR = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, RAG_DIR)
+
 from pipelines.importer import import_repo
 from pipelines.history_indexer import index_commit_history
 from core.summarizer import summarize_all_files

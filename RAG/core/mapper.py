@@ -2,7 +2,7 @@
 import requests
 import json
 from dotenv import load_dotenv
-from config import MODEL
+from rag_config import MODEL
 import os 
 load_dotenv()
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
