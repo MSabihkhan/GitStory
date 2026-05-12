@@ -1,14 +1,15 @@
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8005";
 
 interface FetchOptions extends RequestInit {
   token?: string;
+  onTokenExpired?: () => void;
 }
 
 async function fetchApi<T>(
   endpoint: string,
   options: FetchOptions = {}
 ): Promise<T> {
-  const { token, ...fetchOptions } = options;
+  const { token, onTokenExpired, ...fetchOptions } = options;
 
   const headers: HeadersInit = {
     "Content-Type": "application/json",
@@ -23,6 +24,13 @@ async function fetchApi<T>(
     ...fetchOptions,
     headers,
   });
+
+  if (response.status === 401) {
+    if (onTokenExpired) {
+      onTokenExpired();
+    }
+    throw new Error("Token has expired. Please log in again.");
+  }
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({ detail: "Request failed" }));
@@ -100,7 +108,7 @@ export const api = {
     }),
 
   indexRepo: (token: string, repoUrl: string, isPrivate: boolean = false, githubToken?: string) =>
-    fetchApi("/api/index-repo", {
+    fetchApi<{ job_id: string; repo_name: string; message: string }>("/api/index-repo", {
       method: "POST",
       token,
       body: JSON.stringify({
@@ -111,10 +119,10 @@ export const api = {
     }),
 
   getIndexStatus: (token: string, jobId: string) =>
-    fetchApi(`/api/index-repo/status/${jobId}`, { token }),
+    fetchApi<{ status: string; repo_name?: string; error?: string }>(`/api/index-repo/status/${jobId}`, { token }),
 
-  // Chat (returns SSE stream)
-  chat: (token: string, message: string, repoName: string): Promise<ReadableStream> => {
+  // Chat (returns SSE stream — caller should read response.body)
+  chat: (token: string, message: string, repoName: string): Promise<Response> => {
     return fetch(`${API_URL}/api/chat`, {
       method: "POST",
       headers: {
@@ -124,7 +132,7 @@ export const api = {
       body: JSON.stringify({ message, repo_name: repoName }),
     }).then((res) => {
       if (!res.ok) throw new Error("Chat request failed");
-      return res.body as unknown as Promise<ReadableStream>;
+      return res;
     });
   },
 
@@ -136,20 +144,20 @@ export const api = {
     }),
 
   // Timeline
-  getTimeline: (token: string, repoUrl: string) =>
-    fetchApi(`/api/timeline?repo_url=${encodeURIComponent(repoUrl)}`, { token }),
+  getTimeline: (token: string, repoUrl: string, options?: { onTokenExpired?: () => void }) =>
+    fetchApi(`/api/timeline?repo_url=${encodeURIComponent(repoUrl)}`, { token, ...options }),
 
   // Hotzone
-  getHotzone: (token: string, repoUrl: string) =>
-    fetchApi(`/api/hotzone?repo_url=${encodeURIComponent(repoUrl)}`, { token }),
+  getHotzone: (token: string, repoUrl: string, options?: { onTokenExpired?: () => void }) =>
+    fetchApi(`/api/hotzone?repo_url=${encodeURIComponent(repoUrl)}`, { token, ...options }),
 
   // Stats
-  getStats: (token: string, repoUrl: string) =>
-    fetchApi(`/api/stats?repo_url=${encodeURIComponent(repoUrl)}`, { token }),
+  getStats: (token: string, repoUrl: string, options?: { onTokenExpired?: () => void }) =>
+    fetchApi(`/api/stats?repo_url=${encodeURIComponent(repoUrl)}`, { token, ...options }),
 
   // Collaborators
-  getCollaborators: (token: string, repoUrl: string) =>
-    fetchApi(`/api/collaborators?repo_url=${encodeURIComponent(repoUrl)}`, { token }),
+  getCollaborators: (token: string, repoUrl: string, options?: { onTokenExpired?: () => void }) =>
+    fetchApi(`/api/collaborators?repo_url=${encodeURIComponent(repoUrl)}`, { token, ...options }),
 
   // Code Review
   codeReview: (token: string, repoUrl: string, githubToken: string, commitCount: number = 1) =>

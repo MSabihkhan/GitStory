@@ -158,8 +158,8 @@ import {
 
 const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutGrid },
-  { name: "Stats", href: "/dashboard/stats", icon: Gauge },
   { name: "Timeline", href: "/dashboard/timeline", icon: GitBranch },
+  { name: "Stats", href: "/dashboard/stats", icon: Gauge },
   { name: "Hotzones", href: "/dashboard/hotzones", icon: Flame },
   { name: "Collaborators", href: "/dashboard/collaborators", icon: Network },
   { name: "Chat", href: "/dashboard/chat", icon: MessageSquare },

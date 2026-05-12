@@ -13,8 +13,11 @@ pydriller==2.6
 lizard
 GitPython
 PyGithub
-tree-sitter==0.23.1
+tree-sitter-language-pack>=1.8.0
 semgrep
+
+# RAG / Vector Store
+chromadb>=0.4.0
 
 # AI & LLMs
 google-generativeai

@@ -72,11 +72,15 @@
 "use client";
 
 import Link from "next/link";
-import { Settings } from "lucide-react";
+import { LogOut } from "lucide-react";
 import { usePathname } from "next/navigation";
+import { useAuth } from "@/lib/use-auth";
+import { useState } from "react";
 
 export function TopNav() {
   const pathname = usePathname();
+  const { logout } = useAuth();
+  const [showDropdown, setShowDropdown] = useState(false);
 
   const currentRoute = pathname;
 
@@ -93,13 +97,16 @@ export function TopNav() {
     <header className="h-[72px] bg-[#08090D] border-b border-[#1F2937] flex items-center justify-between px-8 select-none">
       
       <div className="flex items-center gap-12">
-        <div className="text-[14px] font-black text-white tracking-[0.15em] uppercase">
+        <Link 
+          href="/dashboard"
+          className="text-[14px] font-black text-white tracking-[0.15em] uppercase cursor-pointer hover:text-[#00E6A4] transition-all duration-300 hover:scale-105"
+        >
           GITSTORY
-        </div>
+        </Link>
 
         <nav className="flex items-center gap-8 text-[13px] font-medium pt-1">
           {navLinks.map((link) => {
-            const isActive = currentRoute === link.href || currentRoute.startsWith(link.href + "/");
+            const isActive = currentRoute === link.href || currentRoute === link.href + "/";
             
             return (
               <Link 
@@ -119,13 +126,26 @@ export function TopNav() {
       </div>
 
       <div className="flex items-center gap-6">
-        <button className="text-[#00E6A4] hover:opacity-80 transition-opacity">
-          <Settings size={20} strokeWidth={2.5} />
-        </button>
-        
-        <button className="w-9 h-9 rounded-full bg-[#1F2937] flex items-center justify-center text-[11px] font-bold text-[#00E6A4] border border-[#30363D] hover:border-[#00E6A4]/50 transition-colors shadow-inner">
-          AM
-        </button>
+        <div className="relative">
+          <button 
+            className="w-9 h-9 rounded-full bg-[#1F2937] flex items-center justify-center text-[11px] font-bold text-[#00E6A4] border border-[#30363D] hover:border-[#00E6A4]/50 transition-colors shadow-inner cursor-pointer"
+            onClick={() => setShowDropdown(!showDropdown)}
+          >
+            AM
+          </button>
+          
+          {showDropdown && (
+            <div className="absolute right-0 top-full mt-2 w-40 bg-[#161B22] border border-[#30363D] rounded-lg shadow-lg overflow-hidden z-50">
+              <button
+                onClick={logout}
+                className="w-full flex items-center gap-2 px-4 py-3 text-sm text-[#F85149] hover:bg-transparent transition-colors"
+              >
+                <LogOut size={16} className="hover:text-[#FF6B61] transition-colors" />
+                <span className="hover:text-[#FF6B61] transition-colors cursor-pointer">Logout</span>
+              </button>
+            </div>
+          )}
+        </div>
       </div>
       
     </header>

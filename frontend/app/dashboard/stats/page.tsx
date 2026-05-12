@@ -244,44 +244,47 @@ interface StatsData {
 
 export default function StatsPage() {
   const { getAccessToken, isAuthenticated } = useAuth();
+  const [mounted, setMounted] = useState(false);
   const [loading, setLoading] = useState(true);
   const [statsData, setStatsData] = useState<StatsData | null>(null);
+  const [hotzoneData, setHotzoneData] = useState<any[]>([]);
   const [repoUrl, setRepoUrl] = useState<string>("");
+  const [repoName, setRepoName] = useState<string>("");
 
   useEffect(() => {
-    async function fetchData() {
-      if (!isAuthenticated) {
-        setLoading(false);
-        return;
-      }
+    setMounted(true);
+  }, []);
 
-      const token = getAccessToken();
-      if (!token) {
-        setLoading(false);
-        return;
-      }
+  useEffect(() => {
+    if (!mounted) return;
 
-      try {
-        const repos = await api.getRepositories(token);
-        if (repos && (repos as any[]).length > 0) {
-          const firstRepo = (repos as any[])[0];
-          const url = firstRepo.repo_url || firstRepo.url || "";
-          setRepoUrl(url);
-
-          if (url) {
-            const stats = await api.getStats(token, url);
-            setStatsData(stats as StatsData);
-          }
-        }
-      } catch (err) {
-        console.error("Failed to fetch stats:", err);
-      } finally {
-        setLoading(false);
-      }
+    // Only use cached data - don't fetch automatically
+    const cachedData = localStorage.getItem("gitstory_cached_data");
+    const currentRepo = localStorage.getItem("gitstory_current_repo");
+    
+    if (!cachedData || !currentRepo) {
+      // No data - user needs to analyze a repo first
+      setLoading(false);
+      return;
     }
 
-    fetchData();
-  }, [isAuthenticated, getAccessToken]);
+    const repo = JSON.parse(currentRepo);
+    if (repo && repo.url) {
+      setRepoUrl(repo.url);
+      const urlParts = repo.url.replace('https://github.com/', '').split('/');
+      setRepoName(urlParts[1] || urlParts[0] || "Repository");
+    }
+
+    const cached = JSON.parse(cachedData);
+    if (cached.stats) {
+      setStatsData(cached.stats as StatsData);
+    }
+    if (cached.hotzone) {
+      setHotzoneData(cached.hotzone);
+    }
+    
+    setLoading(false);
+  }, [mounted]);
 
   if (loading) {
     return (
@@ -293,11 +296,18 @@ export default function StatsPage() {
     );
   }
 
-  const buildStability = statsData?.build_stability ?? 99.9;
-  const healthScore = statsData?.health_score ?? 82;
-  const totalCommits = statsData?.total_commits ?? "12,847";
-  const activeContributors = statsData?.active_contributors ?? 47;
-  const avgDailyCommits = statsData?.avg_daily_commits ?? 156;
+  const buildStability = statsData?.build_stability ?? 0;
+  const healthScore = statsData?.health_score ?? 0;
+  const totalCommits = statsData?.total_commits ?? "0";
+  const activeContributors = statsData?.active_contributors ?? 0;
+  const avgDailyCommits = statsData?.avg_daily_commits ?? 0;
+  
+  // Calculate complexity based on file count from hotzone data
+  const fileCount = hotzoneData?.length ?? 0;
+  const complexityLabel = fileCount > 100 ? "High" : fileCount > 50 ? "Medium" : "Low";
+  
+  // Format commits for display
+  const commitsDisplay = typeof totalCommits === 'string' ? totalCommits : String(totalCommits);
 
   return (
     <DashboardShell>
@@ -309,8 +319,9 @@ export default function StatsPage() {
             
             {/* Left Stat */}
             <div className="bg-[#161B22]/50 border border-[#1F2937] rounded-2xl p-5 w-56 shadow-lg backdrop-blur-sm">
-              <div className="text-[10px] font-bold text-[#484F58] uppercase tracking-widest mb-1">Build Stability</div>
-              <div className="text-3xl font-bold text-[#00E6A4] tracking-tight">{buildStability}%</div>
+              <div className="text-[10px] font-bold text-[#484F58] uppercase tracking-widest mb-1">Total Commits</div>
+              <div className="text-3xl font-bold text-[#00E6A4] tracking-tight">{commitsDisplay}</div>
+              <div className="text-xs text-[#484F58] mt-1">{activeContributors} contributors</div>
             </div>
 
             {/* Center Gauge */}
@@ -318,7 +329,15 @@ export default function StatsPage() {
               <div className="relative w-48 h-48 flex items-center justify-center">
                 <svg className="absolute inset-0 w-full h-full transform -rotate-90" viewBox="0 0 100 100">
                   <circle cx="50" cy="50" r="42" fill="transparent" stroke="#1F2937" strokeWidth="8" strokeDasharray="198 264" strokeDashoffset="-33" strokeLinecap="round" />
-                  <circle cx="50" cy="50" r="42" fill="transparent" stroke="#00E6A4" strokeWidth="8" strokeDasharray="162 264" strokeDashoffset="-33" strokeLinecap="round" />
+                  <circle 
+                    cx="50" cy="50" r="42" 
+                    fill="transparent" 
+                    stroke={healthScore > 70 ? "#00E6A4" : healthScore > 40 ? "#D97706" : "#EF4444"} 
+                    strokeWidth="8" 
+                    strokeDasharray={`${healthScore * 2.64} 264`} 
+                    strokeDashoffset="-33" 
+                    strokeLinecap="round" 
+                  />
                 </svg>
                 <div className="flex flex-col items-center text-center z-10 mt-2">
                   <span className="text-5xl font-bold text-white tracking-tight leading-none">{healthScore}</span>
@@ -329,15 +348,16 @@ export default function StatsPage() {
 
             {/* Right Stat */}
             <div className="bg-[#161B22]/50 border border-[#1F2937] rounded-2xl p-5 w-56 shadow-lg backdrop-blur-sm">
-              <div className="text-[10px] font-bold text-[#484F58] uppercase tracking-widest mb-1">Complexity</div>
-              <div className="text-2xl font-bold text-white tracking-tight mt-1">O(n log n)</div>
+              <div className="text-[10px] font-bold text-[#484F58] uppercase tracking-widest mb-1">Active Files</div>
+              <div className="text-2xl font-bold text-white tracking-tight mt-1">{fileCount}</div>
+              <div className="text-xs text-[#484F58] mt-1">{avgDailyCommits} daily avg</div>
             </div>
           </div>
 
           {/* Global Title */}
           <div className="text-center mt-2">
-            <h1 className="text-3xl font-bold text-white mb-2 tracking-wide">Observability Obsidian</h1>
-            <p className="text-sm text-[#8B949E]">Structural integrity improved by 12.4% since last chronographic snapshot.</p>
+            <h1 className="text-3xl font-bold text-white mb-2 tracking-wide">{repoName || "Repository Stats"}</h1>
+            <p className="text-sm text-[#8B949E]">{repoUrl || "No repository selected"}</p>
           </div>
         </div>
 
@@ -347,20 +367,42 @@ export default function StatsPage() {
           {/* Section Header */}
           <div className="flex justify-between items-center mb-8">
             <div>
-              <h2 className="text-2xl font-bold text-white tracking-wide">Pending Anomalies</h2>
-              <p className="text-sm text-[#8B949E] mt-1">Critical interventions required for temporal stability.</p>
+              <h2 className="text-2xl font-bold text-white tracking-wide">Code Hotzones</h2>
+              <p className="text-sm text-[#8B949E] mt-1">Files with highest commit activity - potential refactoring targets.</p>
             </div>
-            <button className="bg-[#00E6A4] text-[#08090D] text-sm font-bold px-6 py-2.5 rounded-full hover:bg-[#00E6A4]/90 transition-colors shadow-lg shadow-[#00E6A4]/10">
-              Initialize Repair
-            </button>
+            <div className="text-sm text-[#484F58]">
+              {hotzoneData.length} files tracked
+            </div>
           </div>
 
-          {/* Issue Cards Grid */}
+          {/* Issue Cards Grid - Real Hotzone Data */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            
-            <AnomalyCard severity="CRITICAL" id="#GX-802" title="Circular Dependency Loop" desc="Found in /core/engine/stream.ts. Creates a memory leak in high-concurrency environments." path="/core/circular.ts" color="#EF4444" assignee="Alex Chen" fillLevel="100%" />
-            <AnomalyCard severity="PERFORMANCE" id="#GX-741" title="Unoptimized Asset Shader" desc="GLSL compiler hitting bottleneck during extrusion phase. Refactor for parallel execution." path="/core/unoptimized.ts" color="#EAB308" assignee="Sarah Miller" fillLevel="65%" />
-            <AnomalyCard severity="SECURITY" id="#GX-912" title="Exposed API Endpoint" desc="Public access found on /v1/internal/telemetry. Requires JWT validation layer." path="/core/exposed.ts" color="#8B5CF6" assignee="Marcus Void" fillLevel="45%" />
+            {hotzoneData.length > 0 ? (
+              hotzoneData.slice(0, 6).map((hz: any, i: number) => {
+                const commits = hz.total_commits || 0;
+                const severity = commits > 10 ? "CRITICAL" : commits > 5 ? "PERFORMANCE" : "STABLE";
+                const color = commits > 10 ? "#EF4444" : commits > 5 ? "#D97706" : "#00E6A4";
+                const fillLevel = commits > 10 ? "100%" : commits > 5 ? "65%" : "30%";
+                const id = `#HX-${String(i + 1).padStart(3, '0')}`;
+                return (
+                  <AnomalyCard 
+                    key={i}
+                    severity={severity}
+                    id={id}
+                    title={hz.name || hz.path?.split('/').pop() || "Unknown File"}
+                    desc={`${commits} commits · ${hz.churn_score || 0} lines changed · Last: ${hz.last_modified ? new Date(hz.last_modified).toLocaleDateString() : 'N/A'}`}
+                    path={hz.path || hz.name || "Unknown"}
+                    color={color}
+                    assignee={hz.author || "Multiple"}
+                    fillLevel={fillLevel}
+                  />
+                );
+              })
+            ) : (
+              <div className="col-span-3 text-center py-12 text-[#484F58]">
+                No hotzone data available. Analyze a repository first.
+              </div>
+            )}
 
           </div>
         </div>

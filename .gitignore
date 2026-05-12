@@ -1,27 +1,55 @@
-# Environments & Secrets (CRITICAL)
+# ============================================
+# GitStory — .gitignore
+# ============================================
+
+# ─── Environments & Secrets (CRITICAL) ──────
 .env
 .env.*
 .venv
 env/
 venv/
 .Sabihenv/
-.claude
 
-# Java / JDK (Situation Specific)
+# ─── AI Agent / Tool Directories ────────────
+.claude/
+.gemini/
+
+# ─── Databases (created at runtime) ─────────
+*.db
+*.sqlite3
+*.sqlite
+
+# ─── ChromaDB Vector Stores ─────────────────
+chroma_db/
+RAG/chroma_db/
+
+# ─── Cloned Repositories (runtime data) ─────
+repos/
+backend/repos/
+
+# ─── RAG Generated Artifacts ────────────────
+RAG/project_maps/
+
+# ─── Generated / Exported Docs ──────────────
+EXPORTED_README*.md
+histry.md
+GitStory_SRS.pdf
+
+# ─── Java / JDK (Situation Specific) ────────
 oracleJdk-26/
 *.class
 *.jar
 *.war
 *.ear
 
-# Next.js, Node.js / JavaScript
+# ─── Next.js, Node.js / JavaScript ──────────
 node_modules/
 .next/
 npm-debug.log*
 yarn-error.log*
 .npm/
 
-# Python Cache & Bytecode
+# ─── Python Cache & Bytecode ────────────────
 __pycache__/
 *.py[cod]
 *$py.class
@@ -31,11 +59,11 @@ __pycache__/
 .coverage
 htmlcov/
 
-# Logs
+# ─── Logs ────────────────────────────────────
 *.log
 logs/
 
-# Build Artifacts & Compiled Output
+# ─── Build Artifacts & Compiled Output ──────
 build/
 dist/
 out/
@@ -45,7 +73,7 @@ obj/
 *.dll
 *.dylib
 
-# IDEs & Editor Files
+# ─── IDEs & Editor Files ────────────────────
 .vscode/
 .idea/
 *.swp
@@ -56,7 +84,7 @@ obj/
 .project
 .classpath
 
-# OS Generated Files
+# ─── OS Generated Files ─────────────────────
 .DS_Store
 .DS_Store?
 ._*

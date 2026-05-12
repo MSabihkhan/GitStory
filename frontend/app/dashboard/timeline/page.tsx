@@ -193,40 +193,62 @@ function BottomStatsBar() {
 }
 
 /* ─────────────────────────────────────────────
-   MAIN RENDER
- ───────────────────────────────────────────── */
+    MAIN RENDER
+  ───────────────────────────────────────────── */
 export default function TimelinePage() {
   const { getAccessToken, isAuthenticated } = useAuth();
+  const [mounted, setMounted] = useState(false);
   const [loading, setLoading] = useState(true);
   const [timelineData, setTimelineData] = useState<TimelineData | null>(null);
+  const [repoUrl, setRepoUrl] = useState<string>("");
 
   useEffect(() => {
-    async function fetchTimeline() {
-      if (!isAuthenticated) {
-        setLoading(false);
-        return;
-      }
+    console.log("TIMELINE: Component mounted, isAuthenticated:", isAuthenticated);
+    setMounted(true);
+  }, []);
 
-      const token = getAccessToken();
-      if (!token) {
-        setLoading(false);
-        return;
-      }
-
-      try {
-        const data = await api.getTimeline(token, "https://github.com/test/repo");
-        setTimelineData(data as TimelineData);
-      } catch (err) {
-        console.error("Failed to fetch timeline:", err);
-      } finally {
-        setLoading(false);
-      }
+  useEffect(() => {
+    if (!mounted) return;
+    
+    // Only use cached data - don't fetch automatically
+    const cachedData = localStorage.getItem("gitstory_cached_data");
+    const currentRepo = localStorage.getItem("gitstory_current_repo");
+    
+    if (!cachedData || !currentRepo) {
+      setLoading(false);
+      return;
     }
 
-    fetchTimeline();
-  }, [isAuthenticated, getAccessToken]);
+    const repo = JSON.parse(currentRepo);
+    if (repo && repo.url) {
+      setRepoUrl(repo.url);
+    }
 
-  const displayData = timelineData || mockTimelineData;
+    const cached = JSON.parse(cachedData);
+    if (cached.timeline) {
+      setTimelineData(cached.timeline as TimelineData);
+    }
+    
+    setLoading(false);
+  }, [mounted]);
+
+  console.log("TIMELINE: Render - loading:", loading, "timelineData:", !!timelineData, "repoUrl:", repoUrl);
+  
+  const displayData = timelineData ? {
+    repo_name: repoUrl ? repoUrl.replace("https://github.com/", "") : mockTimelineData.repo_name,
+    total_commits: (timelineData as any).commits?.length || mockTimelineData.total_commits,
+    benchmarks: mockTimelineData.benchmarks,
+    stories: ((timelineData as any).commits?.slice(0, 3) || []).map((c: any) => ({
+      date: new Date(c.date || c.author_date || Date.now()).toLocaleDateString(),
+      category: "COMMITS",
+      title: (c.msg || c.message || "Commit").slice(0, 60) || "Commit",
+      narrative: c.msg || c.message || `Commit by ${c.author || "Unknown"}`,
+      commits: 1,
+      filesChanged: c.files_changed || 0,
+      linesAdded: c.insertions || 0,
+      linesRemoved: c.deletions || 0,
+    }))
+  } : mockTimelineData;
 
   if (loading) {
     return (
@@ -254,7 +276,7 @@ export default function TimelinePage() {
           <div style={{ position: "absolute", left: "50%", top: 0, bottom: 0, width: 1, backgroundColor: C.dotLine, transform: "translateX(-50%)" }} />
 
           {/* Dynamic stories from API or fallback to mock */}
-          {displayData.stories.slice(0, 3).map((story, index) => {
+          {(displayData.stories || []).slice(0, 3).map((story: any, index: number) => {
             const colors = [C.teal, C.purple, C.amber];
             const phases = ["PHASE 01 / INFRASTRUCTURE", "PHASE 02 / REFINEMENT", "PHASE 03 / OPTIMIZATION"];
             const isEven = index % 2 === 1;

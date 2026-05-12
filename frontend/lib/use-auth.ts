@@ -1,7 +1,7 @@
 import { useRouter } from "next/navigation";
 import { api } from "./api";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8005";
 
 interface StoredAuth {
   access_token: string;
@@ -77,8 +77,14 @@ export function useAuth() {
   const logout = () => {
     if (typeof window !== "undefined") {
       localStorage.removeItem("gitstory_auth");
+      localStorage.removeItem("gitstory_current_repo");
+      localStorage.removeItem("gitstory_cached_data");
+      localStorage.removeItem("gitstory_module_status");
+      localStorage.removeItem("gitstory_indexing_status");
+      localStorage.removeItem("gitstory_is_indexing");
+      localStorage.removeItem("gitstory_indexing_job_id");
     }
-    router.push("/login");
+    window.location.href = "/login";
   };
 
   const register = async (email: string, password: string, name?: string) => {

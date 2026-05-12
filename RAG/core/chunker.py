@@ -1,93 +1,73 @@
 # core/chunker.py
-from tree_sitter import Language, Parser
-from tree_sitter_languages import get_language, get_parser
+# Migrated from tree_sitter_languages (abandoned, no Python 3.13 support)
+# to tree_sitter_language_pack (maintained, downloads grammars on-demand)
+from tree_sitter_language_pack import process, ProcessConfig, available_languages, get_language
 from pathlib import Path
 
 
 # ── Language config ──────────────────────────────────────
-# Maps file extension → (tree-sitter language name, meaningful node types)
-# "meaningful node types" = the AST nodes we want to extract as chunks
-LANGUAGE_CONFIG = {
-    # Extension : (ts_language,  node_types_to_extract)
-    '.py':   ('python',     ['function_definition', 'class_definition']),
-    '.js':   ('javascript', ['function_declaration', 'class_declaration','arrow_function', 'method_definition']),
-    '.ts':   ('typescript', ['function_declaration', 'class_declaration','arrow_function', 'method_definition']),
-    '.jsx':  ('javascript', ['function_declaration', 'class_declaration','arrow_function', 'jsx_element']),
-    '.tsx':  ('typescript', ['function_declaration', 'class_declaration','arrow_function', 'jsx_element']),
-    '.java': ('java',       ['method_declaration', 'class_declaration','interface_declaration', 'constructor_declaration']),
-    '.cpp':  ('cpp',        ['function_definition', 'class_specifier']),
-    '.c':    ('c',          ['function_definition']),
-    '.cs':   ('c_sharp',    ['method_declaration', 'class_declaration','constructor_declaration', 'interface_declaration']),
-    '.go':   ('go',         ['function_declaration', 'method_declaration','type_declaration']),
-    '.rs':   ('rust',       ['function_item', 'impl_item', 'struct_item','enum_item', 'trait_item']),
-    '.rb':   ('ruby',       ['method', 'class', 'module']),
-    '.php':  ('php',        ['function_definition', 'class_declaration','method_declaration']),
-    '.swift':('swift',      ['function_declaration', 'class_declaration','struct_declaration', 'protocol_declaration']),
-    '.kt':   ('kotlin',     ['function_declaration', 'class_declaration','object_declaration']),
-    '.scala':('scala',      ['function_definition', 'class_definition','object_definition', 'trait_definition']),
-    '.r':    ('r',          ['function_definition']),
-    '.lua':  ('lua',        ['function_declaration', 'local_function']),
+# Maps file extension → tree-sitter language name
+EXTENSION_TO_LANGUAGE = {
+    '.py':    'python',
+    '.js':    'javascript',
+    '.ts':    'typescript',
+    '.jsx':   'javascript',
+    '.tsx':   'typescript',
+    '.java':  'java',
+    '.cpp':   'cpp',
+    '.c':     'c',
+    '.cs':    'c_sharp',
+    '.go':    'go',
+    '.rs':    'rust',
+    '.rb':    'ruby',
+    '.php':   'php',
+    '.swift': 'swift',
+    '.kt':    'kotlin',
+    '.scala': 'scala',
+    '.r':     'r',
+    '.lua':   'lua',
 }
 
 # Text-based formats — no AST needed, just line chunking
 TEXT_EXTENSIONS = {'.md', '.txt', '.yaml', '.yml', '.json', '.toml', '.ini', '.env'}
 
 
-# ── Core tree-sitter extractor ───────────────────────────
-def chunk_with_treesitter(file_path: str, content: str,ts_lang: str, node_types: list) -> list:
+# ── Core tree-sitter extractor (using tree_sitter_language_pack) ──
+def chunk_with_treesitter(file_path: str, content: str, ts_lang: str) -> list:
     """
-    Universal chunker. Works for any language tree-sitter supports.
-    Walks the syntax tree and extracts meaningful nodes as chunks.
+    Uses tree_sitter_language_pack's `process()` API to extract
+    structural chunks (functions, classes, methods, etc.) from source code.
+    Falls back to line-based chunking on any failure.
     """
     try:
-        parser = get_parser(ts_lang)
+        cfg = ProcessConfig(language=ts_lang)
+        result = process(content, cfg)
     except Exception as e:
-        print(f"[chunker] tree-sitter failed for {ts_lang}: {e}")
+        print(f"[chunker] tree-sitter-language-pack failed for {ts_lang}: {e}")
         return chunk_by_lines(file_path, content)
-
-    # tree-sitter works on bytes, not strings
-    content_bytes = content.encode('utf-8')
-    tree = parser.parse(content_bytes)
 
     chunks = []
     lines = content.splitlines()
 
-    def walk(node):
-        """Recursively walk the syntax tree."""
-        if node.type in node_types:
-            start_line = node.start_point[0]    # (row, col) — 0 indexed
-            end_line = node.end_point[0] + 1    # make it exclusive
+    # Extract structural items (functions, classes, methods, etc.)
+    for item in result.structure:
+        start_line = item.span.start_line       # 0-indexed
+        end_line = item.span.end_line + 1       # make exclusive
 
-            block = "\n".join(lines[start_line:end_line])
+        block = "\n".join(lines[start_line:end_line])
 
-            # Skip tiny nodes — one-liners, empty declarations
-            if len(block.strip()) < 40:
-                # Still walk children — might have nested functions
-                for child in node.children:
-                    walk(child)
-                return
+        # Skip tiny nodes — one-liners, empty declarations
+        if len(block.strip()) < 40:
+            continue
 
-            # Extract the name if possible
-            name = _extract_name(node, content_bytes)
-
-            chunks.append({
-                "text": block,
-                "file_path": file_path,
-                "type": node.type,
-                "name": name,
-                "start_line": start_line + 1,   # back to 1-indexed for humans
-                "end_line": end_line,
-            })
-
-            # Don't walk children of extracted nodes
-            # (avoids double-extracting nested functions inside a class)
-            return
-
-        # Not a target node — keep walking down
-        for child in node.children:
-            walk(child)
-
-    walk(tree.root_node)
+        chunks.append({
+            "text": block,
+            "file_path": file_path,
+            "type": str(item.kind),
+            "name": item.name or f"anonymous_{item.kind}",
+            "start_line": start_line + 1,   # back to 1-indexed for humans
+            "end_line": end_line,
+        })
 
     # Always prepend module-level context (imports, constants)
     header = _extract_header(lines)
@@ -102,17 +82,6 @@ def chunk_with_treesitter(file_path: str, content: str,ts_lang: str, node_types:
         })
 
     return chunks if chunks else chunk_by_lines(file_path, content)
-
-
-def _extract_name(node, content_bytes: bytes) -> str:
-    """
-    Tries to find the name of a function/class node.
-    tree-sitter puts the name in a child node called 'identifier' or 'name'.
-    """
-    for child in node.children:
-        if child.type in ('identifier', 'name', 'type_identifier'):
-            return content_bytes[child.start_byte:child.end_byte].decode('utf-8')
-    return f"anonymous_{node.type}"
 
 
 def _extract_header(lines: list, max_lines: int = 30) -> str:
@@ -155,11 +124,10 @@ def chunk_file(file_path: str, content: str) -> list:
         return chunk_by_lines(file_path, content)
 
     # Known code language — use tree-sitter
-    if ext in LANGUAGE_CONFIG:
-        ts_lang, node_types = LANGUAGE_CONFIG[ext]
-        return chunk_with_treesitter(file_path, content, ts_lang, node_types)
+    if ext in EXTENSION_TO_LANGUAGE:
+        ts_lang = EXTENSION_TO_LANGUAGE[ext]
+        return chunk_with_treesitter(file_path, content, ts_lang)
 
     # Unknown extension — try line chunking
     print(f"[chunker] Unknown extension {ext}, using line chunking for {file_path}")
     return chunk_by_lines(file_path, content)
-

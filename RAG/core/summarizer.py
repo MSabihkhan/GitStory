@@ -4,7 +4,7 @@ import requests
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dotenv import load_dotenv
 from tenacity import retry, stop_after_attempt, wait_exponential
-from config import MODEL, API_RETRY_ATTEMPTS, API_RETRY_WAIT_MIN, API_RETRY_WAIT_MAX, MAX_SUMMARY_WORKERS
+from rag_config import MODEL, API_RETRY_ATTEMPTS, API_RETRY_WAIT_MIN, API_RETRY_WAIT_MAX, MAX_SUMMARY_WORKERS
 
 load_dotenv()
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")

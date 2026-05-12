@@ -397,45 +397,45 @@ function ContributorCard({ contributor }: { contributor: Contributor }) {
 // ─── Page ─────────────────────────────────────────────────────────────────────
 export default function CollaboratorsPage() {
   const { getAccessToken, isAuthenticated } = useAuth();
+  const [mounted, setMounted] = useState(false);
   const [loading, setLoading] = useState(true);
   const [collaboratorsData, setCollaboratorsData] = useState<Contributor[]>([]);
 
   useEffect(() => {
-    async function fetchData() {
-      if (!isAuthenticated) {
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (!mounted) return;
+
+async function fetchData() {
+      // Only use cached data - don't fetch automatically
+      const cachedData = localStorage.getItem("gitstory_cached_data");
+      console.log("COLLAB: cachedData exists:", !!cachedData);
+      
+      if (!cachedData) {
         setLoading(false);
         return;
       }
 
-      const token = getAccessToken();
-      if (!token) {
-        setLoading(false);
-        return;
-      }
-
-      try {
-        const repos = await api.getRepositories(token);
-        if (repos && (repos as any[]).length > 0) {
-          const firstRepo = (repos as any[])[0];
-          const url = firstRepo.repo_url || firstRepo.url || "";
-
-          if (url) {
-            const data = await api.getCollaborators(token, url);
-            const collabData = data as any;
-            if (collabData?.contributors) {
-              setCollaboratorsData(collabData.contributors);
-            }
-          }
+      const cached = JSON.parse(cachedData);
+      console.log("COLLAB: cached keys:", Object.keys(cached));
+      console.log("COLLAB: cached.collaborators:", cached.collaborators);
+      
+      // Handle both array and object with contributors property
+      if (cached.collaborators) {
+        if (Array.isArray(cached.collaborators)) {
+          setCollaboratorsData(cached.collaborators);
+        } else if (cached.collaborators.contributors && Array.isArray(cached.collaborators.contributors)) {
+          setCollaboratorsData(cached.collaborators.contributors);
         }
-      } catch (err) {
-        console.error("Failed to fetch collaborators:", err);
-      } finally {
-        setLoading(false);
       }
+      
+      setLoading(false);
     }
 
     fetchData();
-  }, [isAuthenticated, getAccessToken]);
+  }, [mounted]);
 
   if (loading) {
     return (

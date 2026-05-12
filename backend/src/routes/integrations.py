@@ -10,6 +10,10 @@ import sys
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 sys.path.insert(0, PROJECT_ROOT)
 
+# Add RAG directory to path for RAG imports (must come AFTER project root to avoid config conflict)
+RAG_DIR = os.path.join(PROJECT_ROOT, "RAG")
+sys.path.insert(0, RAG_DIR)
+
 from src.config.database import get_db
 from src.middleware.auth import get_current_user
 from src.models.user import User
@@ -62,6 +66,58 @@ class ReviewRequest(BaseModel):
 def _repo_name_from_url(url: str) -> str:
     """Extract repo name from URL."""
     return url.replace("https://github.com/", "").replace("https://github.com/", "").rstrip("/").split("/")[-1]
+
+
+def _ensure_repo_cloned(repo_url: str) -> str:
+    """
+    Ensures a repository is cloned to the local repos folder.
+    Returns the local path to the cloned repository.
+    """
+    from urllib.parse import urlparse
+    
+    parsed = urlparse(repo_url)
+    path_parts = [p for p in parsed.path.strip("/").split("/") if p]
+    if len(path_parts) < 2:
+        raise ValueError("Invalid GitHub URL")
+    
+    owner, repo = path_parts[0], path_parts[1].replace(".git", "")
+    local_path = os.path.join(PROJECT_ROOT, "repos", f"{owner}_{repo}")
+    
+    if os.path.exists(local_path):
+        # Check if it's a valid git repo with commits
+        git_dir = os.path.join(local_path, ".git")
+        if os.path.exists(git_dir):
+            # Check if repo has any commits
+            import subprocess
+            result = subprocess.run(
+                ["git", "rev-list", "--count", "HEAD"],
+                capture_output=True, text=True, timeout=10,
+                cwd=local_path
+            )
+            if result.returncode == 0 and int(result.stdout.strip() or "0") > 0:
+                return local_path
+        # Invalid/empty repo, remove and re-clone
+        import shutil
+        shutil.rmtree(local_path, ignore_errors=True)
+    
+    os.makedirs(os.path.join(PROJECT_ROOT, "repos"), exist_ok=True)
+    
+    clone_url = f"https://github.com/{owner}/{repo}.git"
+    import subprocess
+    try:
+        # Full clone for reliable pydriller access
+        result = subprocess.run(
+            ["git", "clone", "--filter=blob:none", clone_url, local_path],
+            capture_output=True, text=True, timeout=600
+        )
+        if result.returncode != 0:
+            raise Exception(f"Clone failed: {result.stderr}")
+    except subprocess.TimeoutExpired:
+        raise Exception("Timeout cloning repository")
+    except Exception as e:
+        raise Exception(f"Failed to clone repository: {str(e)}")
+    
+    return local_path
 
 
 # ─── Analyze Endpoint ─────────────────────────────────────────────────
@@ -160,9 +216,8 @@ def index_repo(
     job_id = str(uuid.uuid4())
     repo_name = _repo_name_from_url(req.repo_url)
 
-    BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
-    CHROMA_PATH = os.path.join(BASE_DIR, "RAG", "chroma_db")
-    MAPS_DIR = os.path.join(BASE_DIR, "RAG", "project_maps")
+    CHROMA_PATH = os.path.join(PROJECT_ROOT, "RAG", "chroma_db")
+    MAPS_DIR = os.path.join(PROJECT_ROOT, "RAG", "project_maps")
 
     _index_jobs[job_id] = {
         "status": "pending",
@@ -225,9 +280,8 @@ async def chat_with_repo(
     from fastapi.responses import StreamingResponse
     from RAG.core.engine import GitStoryEngine
 
-    BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
-    CHROMA_PATH = os.path.join(BASE_DIR, "RAG", "chroma_db")
-    MAPS_DIR = os.path.join(BASE_DIR, "RAG", "project_maps")
+    CHROMA_PATH = os.path.join(PROJECT_ROOT, "RAG", "chroma_db")
+    MAPS_DIR = os.path.join(PROJECT_ROOT, "RAG", "project_maps")
 
     map_path = os.path.join(MAPS_DIR, f"{req.repo_name}.json")
     if not os.path.exists(map_path):
@@ -272,7 +326,8 @@ async def get_timeline(
     from timeline import extract_repo_data
     from narration import NarrationGenerator
 
-    commits = extract_repo_data(repo_url)
+    local_path = _ensure_repo_cloned(repo_url)
+    commits = extract_repo_data(local_path, max_commits=50)
     if not commits:
         raise HTTPException(status_code=400, detail="Could not extract data from repository")
 
@@ -290,7 +345,8 @@ async def get_hotzone(
     """Get file churn data."""
     from heatmap import get_churn_data
 
-    data = get_churn_data(repo_url)
+    local_path = _ensure_repo_cloned(repo_url)
+    data = get_churn_data(local_path)
     if not data:
         raise HTTPException(status_code=400, detail="Could not extract churn data")
 
@@ -318,7 +374,7 @@ async def code_review(
 # ─── Stats & Collaborators Endpoints ──────────────────────────────────────
 
 @router.get("/stats")
-async def get_stats(
+def get_stats(
     repo_url: str,
     current_user: dict = Depends(get_current_user)
 ):
@@ -326,21 +382,8 @@ async def get_stats(
     import subprocess
     import json
     import re
-    from urllib.parse import urlparse
     
-    parsed = urlparse(repo_url)
-    if "github.com" in parsed.netloc:
-        path_parts = [p for p in parsed.path.strip("/").split("/") if p]
-        if len(path_parts) >= 2:
-            owner, repo = path_parts[0], path_parts[1].replace(".git", "")
-        else:
-            raise HTTPException(status_code=400, detail="Invalid GitHub URL")
-    else:
-        raise HTTPException(status_code=400, detail="Only GitHub repos supported")
-    
-    git_dir = os.path.join(PROJECT_ROOT, "repos", f"{owner}_{repo}")
-    if not os.path.exists(git_dir):
-        return get_mock_stats()
+    git_dir = _ensure_repo_cloned(repo_url)
     
     try:
         os.chdir(git_dir)
@@ -411,7 +454,8 @@ async def get_stats(
         recent_commits = len(churn_result.split("\n")) if churn_result else 0
         churn_rate = min(recent_commits * 12, 1500)
         
-        build_stability = min(95 + (hash(repo) % 5), 99.9)
+        repo_name = repo_url.split('/')[-1] if repo_url else "repo"
+        build_stability = min(95 + (hash(repo_name) % 5), 99.9)
         health_score = min(70 + (unique_contributors % 20), 95)
         
         return {
@@ -433,6 +477,9 @@ async def get_stats(
             }
         }
     except Exception as e:
+        import traceback
+        print(f"--- ERROR in get_stats: {e}")
+        print(f"--- Traceback: {traceback.format_exc()}")
         return get_mock_stats()
 
 
@@ -479,21 +526,8 @@ async def get_collaborators(
 ):
     """Get repository contributors."""
     import subprocess
-    from urllib.parse import urlparse
     
-    parsed = urlparse(repo_url)
-    if "github.com" in parsed.netloc:
-        path_parts = [p for p in parsed.path.strip("/").split("/") if p]
-        if len(path_parts) >= 2:
-            owner, repo = path_parts[0], path_parts[1].replace(".git", "")
-        else:
-            raise HTTPException(status_code=400, detail="Invalid GitHub URL")
-    else:
-        raise HTTPException(status_code=400, detail="Only GitHub repos supported")
-    
-    git_dir = os.path.join(PROJECT_ROOT, "repos", f"{owner}_{repo}")
-    if not os.path.exists(git_dir):
-        return get_mock_collaborators()
+    git_dir = _ensure_repo_cloned(repo_url)
     
     try:
         os.chdir(git_dir)
